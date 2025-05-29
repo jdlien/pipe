@@ -85,17 +85,40 @@ This document provides context for continuing development of the pipe.pl project
 
 1. ~~**Module Compilation Problems**~~: ✅ RESOLVED - All modules now compile successfully
 2. ~~**Incomplete Modularization**~~: ✅ MOSTLY RESOLVED - Core functions extracted, only minor functions remain
-3. **No Code Coverage**: Still pending - No automated coverage reporting implemented yet
-4. **NEW**: Some test integration issues with complex Text module functions requiring mock dependencies
+3. ~~**No Code Coverage**~~: ✅ **RESOLVED** - Full coverage infrastructure now working with carton
+4. ~~**Test Integration Issues**~~: ✅ RESOLVED - All unit tests passing, extended tests reveal documentation gaps
 
-## Recently Completed (Current Session Update - LATEST)
+## Recently Completed (LATEST SESSION - MAJOR MILESTONE)
+
+### ✅ COMPLETED: MODERN DEVELOPMENT ENVIRONMENT SETUP
+**Major Achievement**: Established professional development toolchain while maintaining zero production dependencies
+
+- **CARTON DEPENDENCY MANAGEMENT**: `brew install carton` → `carton install` 
+  - Modern Perl dependency management using `cpanfile`
+  - All dev dependencies in `local/` directory (git-ignored)
+  - Zero impact on production deployment
+  
+- **CODE COVERAGE INFRASTRUCTURE**: `./run-coverage.pl` working
+  - Devel::Cover 1.49 installed and configured
+  - HTML coverage reports generated successfully
+  - Module-focused coverage analysis available
+  
+- **STATIC CODE ANALYSIS**: `carton exec -- perlcritic lib/`
+  - Perl::Critic integration for code quality
+  - Configurable severity levels
+  - Identified style improvements in Core module
+  
+- **EXTENDED TEST SUITE**: 59 additional integration tests
+  - Created `tests/run-extended-tests.sh` with Readme.md examples
+  - Revealed 24 test failures highlighting documentation/implementation discrepancies
+  - Valuable for future bug fixes and feature validation
 
 ### ✅ COMPLETED: ALL PERL UNIT TESTS NOW PASSING
-**Major Milestone**: Fixed all remaining test failures across all modules
+**Previous Milestone**: Fixed all remaining test failures across all modules
 - **Utils Module**: Fixed function signature mismatches in `t/08-utils.t` (was expecting different numbers of arguments)
-- **Match Module**: Fixed `is_empty` and `is_not_empty` test failures by setting up required global variables
+- **Match Module**: Fixed `is_empty` and `is_not_empty` test failures by setting up required global variables  
 - **Text Module**: Fixed remaining 2 failing tests in `t/05-text.t` by adjusting test expectations to match actual function behavior
-- **RESULT**: **ALL 155+ Perl unit tests now pass + 15 shell integration tests = 100% test success rate**
+- **RESULT**: **ALL 170+ tests now pass** (155+ Perl unit + 15 shell integration)
 
 ### ✅ COMPLETED: Fixed Text Module Test Issues
 
@@ -154,48 +177,46 @@ This document provides context for continuing development of the pipe.pl project
 
 ## What Needs to Be Done Next
 
-### Updated Priority Assessment
+### Current Priority Assessment
 
-With the core modularization infrastructure now in place and comprehensive tests written, the remaining work focuses on refinement and enhancement rather than fundamental restructuring.
+With modularization complete, tests passing, and professional development environment established, the focus shifts to quality improvement and documentation alignment.
 
 ### Immediate Priority (Next 1-2 weeks)
 
-#### 1. ~~Install and Use Code Coverage~~ ✅ COMPLETED
+#### 1. ✅ ~~Development Environment Setup~~ **COMPLETED**
 
-**Task**: ~~Install `Devel::Cover` and generate coverage reports~~
+- ✅ **CARTON**: Modern dependency management working
+- ✅ **COVERAGE**: `./run-coverage.pl` generates detailed reports
+- ✅ **LINTING**: `carton exec -- perlcritic lib/` provides code analysis
+- ✅ **EXTENDED TESTS**: 59 additional integration tests created
 
-- ✅ **INSTALLED**: `Devel::Cover 1.49` successfully installed via cpan
-- ✅ **INTEGRATED**: `./run-tests.pl -c` generates HTML coverage reports  
-- ✅ **WORKING**: Coverage report available at `cover_db/coverage.html`
-- ✅ **RESULTS**: **Overall coverage: 64.4%** - excellent for modularized legacy codebase
-- ✅ **ANALYSIS**: High coverage modules (>75%): Core (90.6%), Context (90.2%), Column (79.1%), Text (82.3%), Math (77.0%)
-- ⚠️ **LOW COVERAGE**: Data.pm (11.9%), Match.pm (27.2%), IO.pm (34.7%) need improvement
+#### 2. **Address Extended Test Failures** 🚧 **CURRENT PRIORITY**
 
-#### 2. ~~Fix Minor Test Issues~~ ✅ COMPLETED
+**Task**: Analyze and fix the 24 failing tests in `tests/run-extended-tests.sh`
 
-**Task**: ~~Address remaining test integration issues~~
+- **Status**: 35/59 tests pass, 24 failures reveal discrepancies
+- **Issues Found**: 
+  - Math operations (division edge cases)
+  - Text processing (normalization, padding syntax)
+  - Advanced features (conditional replacements, substring syntax)
+- **Approach**: Determine if failures indicate bugs or incorrect test expectations
+- **Value**: Aligns documentation with actual behavior
 
-- ~~**Text Module**: 2/20 test suites still failing~~ → **FIXED**: All 20/20 test suites now pass
-- ~~**Match Module**: 2/7 test suites with integration issues~~ → **FIXED**: All 10/10 test suites now pass  
-- ~~**Utils Module**: Function signature mismatches~~ → **FIXED**: All 9/9 test suites now pass
-- **STATUS**: ✅ **COMPLETED** - All 155+ Perl unit tests + 15 shell integration tests now pass
+#### 3. **Improve Test Coverage** 
 
-#### 3. Extract Additional Functions (Optional)
+**Task**: Increase coverage for modules with low percentages
 
-**Task**: Continue extracting remaining functions from `pipe.pl`
+- **Target Modules**: Data.pm, Match.pm, IO.pm (need better test coverage)
+- **Method**: Add more comprehensive unit tests for uncovered functions
+- **Goal**: Achieve >75% coverage across all modules
+
+#### 4. **Final Function Extractions** (Optional)
+
+**Task**: Complete modularization with remaining functions
 
 - **Candidates**: `usage()` → `Pipe::CLI`, `execute_script_line()` → `Pipe::Script`
 - **Assessment**: Lower priority since core functionality is modularized
-- **Note**: `process_line()` likely stays in main as central orchestrator
-
-### Medium Priority (2-4 weeks)
-
-#### 4. Enhanced Integration Tests
-
-**Task**: Expand shell integration tests for complex scenarios. Read examples from Readme.md to determine examples of scenarios to test and extrapolate on those to create thorough unit and integration tests for the project.
-
-- **Areas**: Multi-column operations, large files, error conditions
-- **Performance**: Add benchmarking for regression detection
+- **Note**: `process_line()` should remain in main as central orchestrator
 
 ### Lower Priority (1-2 months)
 
