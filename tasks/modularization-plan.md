@@ -61,30 +61,34 @@ pipe/
 - [x] **COMPLETED: Remove duplicate code from pipe.pl (376 lines removed)**
 - [x] **ACHIEVEMENT: pipe.pl reduced from 4,332 → 3,956 lines (8.7% reduction)**
 
-### Phase 3: Column Operations (3-4 days)
-- [ ] Create Pipe::Column module
-  - [ ] Move read_requested_columns()
-  - [ ] Move read_requested_qualified_columns()
-  - [ ] Move parse_single_column_single_argument()
-  - [ ] Move order_line()
-  - [ ] Move merge_line()
-  - [ ] Move get_column_value()
-  - [ ] Move column validation functions
-- [ ] Update all column-related operations
-- [ ] Test column operations (-o, -O, etc.)
+### Phase 3: Column Operations (3-4 days) - ✅ COMPLETED (2025-05-29)
+- [x] Create Pipe::Column module
+  - [x] Move read_requested_columns()
+  - [x] Move read_requested_qualified_columns()
+  - [x] Move parse_single_column_single_argument()
+  - [x] Move order_line()
+  - [x] Move merge_line()
+  - [x] Move get_column_value()
+  - [x] Move column validation functions
+- [x] Update all column-related operations
+- [x] Test column operations (-o, -O, etc.)
+- [x] **ACHIEVEMENT: pipe.pl reduced from 3,956 → 3,611 lines (345 lines removed)**
 
-### Phase 4: Text Processing (3-4 days)
-- [ ] Create Pipe::Text module
-  - [ ] Move trim_line()
-  - [ ] Move normalize_line()
-  - [ ] Move apply_casing() and modify_case_line()
-  - [ ] Move translate_line()
-  - [ ] Move replace_line()
-  - [ ] Move flip_char_line()
-  - [ ] Move mask_line() and apply_mask()
-  - [ ] Move sub_string_line()
-  - [ ] Move pad_line() and apply_padding()
-- [ ] Test all text operations (-e, -E, -f, -l, -m, -n, -p, -S, -t)
+### Phase 4: Text Processing (3-4 days) - ✅ COMPLETED (2025-05-29)
+- [x] Create Pipe::Text module
+  - [x] Move trim_line()
+  - [x] Move normalize_line()
+  - [x] Move apply_casing() and modify_case_line()
+  - [x] Move translate_line()
+  - [x] Move replace_line()
+  - [x] Move flip_char_line()
+  - [x] Move mask_line() and apply_mask()
+  - [x] Move sub_string_line()
+  - [x] Move pad_line() and apply_padding()
+  - [x] Move normalize() helper function
+  - [x] Move url_encode_line()
+- [x] Test all text operations (-e, -E, -f, -l, -m, -n, -p, -S, -t)
+- [x] **MAJOR ACHIEVEMENT: pipe.pl reduced from 3,611 → 2,884 lines (727 lines removed)**
 
 ### Phase 5: Pattern Matching (2-3 days)
 - [ ] Create Pipe::Match module
@@ -184,11 +188,17 @@ pipe/
 4. Improved code clarity and maintainability ✅ (achieved through modular separation)
 5. No external dependencies added ✅ (only used core Perl modules)
 
-## Current Progress Summary (Phase 2 Complete)
-- **Modules Created:** 3 of 8 planned modules (Pipe::Core, Pipe::Context, Pipe::IO)
-- **Lines Reduced:** 376 lines from main script (4,332 → 3,956 lines)
+## Current Progress Summary (Phase 4 Complete - MAJOR MILESTONE!)
+- **Modules Created:** 5 of 8 planned modules completed (62.5% complete)
+  - ✅ Pipe::Core (constants, utilities)
+  - ✅ Pipe::Context (state management)
+  - ✅ Pipe::IO (I/O operations) - 376 lines removed
+  - ✅ Pipe::Column (column operations) - 345 lines removed
+  - ✅ Pipe::Text (text processing) - 727 lines removed
+- **Total Lines Reduced:** 1,448 lines from main script (4,332 → 2,884 lines)
+- **Overall Reduction:** 33.4% of original codebase modularized
 - **Functionality:** All basic operations working correctly
-- **Testing:** Syntax validation passed, basic functionality verified
+- **Testing:** Syntax validation passed, core functionality verified
 
 ## Timeline
 Total estimated time: 25-35 days of development

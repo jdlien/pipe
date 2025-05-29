@@ -13,7 +13,6 @@ our @EXPORT_OK = qw(
     table_output
     print_summary
     is_printable_range
-    finalize_full_read_functions
     build_encoding_table
     map_url_characters
 );
@@ -21,7 +20,6 @@ our @EXPORT_OK = qw(
 our %EXPORT_TAGS = (
     output => [qw(prepare_table_data table_output print_summary)],
     input => [qw(is_printable_range)],
-    processing => [qw(finalize_full_read_functions)],
     encoding => [qw(build_encoding_table map_url_characters)],
 );
 
@@ -343,7 +341,7 @@ sub print_summary {
             printf STDERR "%s%s%s\n", 'c'.$column, $delimiter, get_number_format($value, 0, $precision);
         }
         else {
-            printf STDERR " c%s: %s\n", $column, get_number_format($value, 0, $precision);
+            printf STDERR " c%s: %7s\n", $column, get_number_format($value, 0, $precision);
         }
     }
 }
@@ -376,39 +374,6 @@ sub is_printable_range {
     return 0;
 }
 
-# Performs operations that require the entire file to be read
-# This includes deduplication, sorting, randomization, and averaging  
-# param: None (operates on global variables)
-# return: None
-sub finalize_full_read_functions()
-{
-    if ( $main::opt{'d'} )
-    {
-        main::dedup_list( \@main::DDUP_COLUMNS );
-    }
-    if ( $main::opt{'r'} ) # select 'n'% of file at random for output.
-    {
-        main::randomize_list();
-    }
-    if ( $main::opt{'s'} )# Sort the items from STDIN.
-    {
-        # We have a list of lines. We will split them creating a key that we append to the start with a delimiter of ''
-        # When it comes time to sort use the default sort in perl and then remove the prefix.
-        main::sort_list( \@main::SORT_COLUMNS );
-    }
-    if ( $main::opt{'v'} ) # Compute averages now we have read the entire input.
-    {
-        foreach my $column ( keys %{$main::avg_ref} )
-        {
-            if ( exists $main::avg_count->{ $column } and $main::avg_count->{ $column } != 0 )
-            {
-                my $result = sprintf "%.3f", ( $main::avg_ref->{ $column } / $main::avg_count->{ $column } );
-                # replace the previous column sum with the average.
-                $main::avg_ref->{ $column } = $result;
-            }
-        }
-    }
-}
 
 # Module-level URL character encoding table
 my $url_characters = {};

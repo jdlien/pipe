@@ -12,10 +12,20 @@ The goal is to refactor the 4000+ line pipe.pl script into manageable modules wh
 - [`modularization-plan.md`](modularization-plan.md) - Complete project plan with timeline and phases
 - [`testing-strategy.md`](testing-strategy.md) - Comprehensive testing approach
 
-### Implementation Phases
-- [`phase-1-core-infrastructure.md`](phase-1-core-infrastructure.md) - Core module setup (Pipe::Core, Pipe::Context)
-- [`phase-2-io-operations.md`](phase-2-io-operations.md) - I/O operations module (Pipe::IO)
+### Implementation Phases (Completed)
+- [`phase-1-core-infrastructure.md`](phase-1-core-infrastructure.md) - Core module setup (Pipe::Core, Pipe::Context) ✅
+- [`phase-2-io-operations.md`](phase-2-io-operations.md) - I/O operations module (Pipe::IO) ✅
+- [`phase-2-integration-cleanup.md`](phase-2-integration-cleanup.md) - Integration cleanup ✅  
+- [`phase-3-column-operations.md`](phase-3-column-operations.md) - Column operations module (Pipe::Column) ✅
+- [`phase-4-text-processing.md`](phase-4-text-processing.md) - Text processing module (Pipe::Text) ✅
+
+### Upcoming Phases
+- [`phase-5-pattern-matching.md`](phase-5-pattern-matching.md) - Pattern matching module (Pipe::Match) 📋
 - Additional phases to be documented as work progresses
+
+### Project Management
+- [`project-status.md`](project-status.md) - Comprehensive project status and metrics
+- [`next-tasks.md`](next-tasks.md) - Detailed next steps and priorities
 
 ## Quick Start
 
@@ -54,10 +64,12 @@ pipe/
 
 - [x] **Phase 0: Prerequisites** ✅ (Testing infrastructure set up)
 - [x] **Phase 1: Core Infrastructure** ✅ (Pipe::Core, Pipe::Context created)
-- [x] **Phase 2: I/O Operations** ✅ **COMPLETED 2024-05-29** (Pipe::IO created and integrated)
+- [x] **Phase 2: I/O Operations** ✅ **COMPLETED 2025-05-29** (Pipe::IO created and integrated)
   - **Achievement:** 376 lines removed from pipe.pl (4,332 → 3,956 lines)
-- [ ] Phase 3: Column Operations
-- [ ] Phase 4: Text Processing
+- [x] **Phase 3: Column Operations** ✅ **COMPLETED 2025-05-29** (Pipe::Column created and integrated)  
+  - **Achievement:** 345 lines removed from pipe.pl (3,956 → 3,611 lines)
+- [x] **Phase 4: Text Processing** ✅ **COMPLETED 2025-05-29** (Pipe::Text created and integrated)
+  - **MAJOR Achievement:** 727 lines removed from pipe.pl (3,611 → 2,884 lines)
 - [ ] Phase 5: Pattern Matching
 - [ ] Phase 6: Mathematical Operations
 - [ ] Phase 7: Data Management
@@ -65,8 +77,10 @@ pipe/
 - [ ] Phase 9: Integration & Optimization
 - [ ] Phase 10: Final Testing & Release
 
-## Current Status: **Phase 2 Complete** ✅
-**Next Phase:** Ready to begin Phase 3 (Column Operations) or comprehensive testing
+## Current Status: **Phase 4 Complete - MAJOR MILESTONE!** ✅
+- **Total Reduction:** 1,448 lines (33.4% of original codebase)
+- **Modules Created:** 5 of 8 planned (62.5% complete)
+- **Next Phase:** Ready to begin Phase 5 (Pattern Matching) - estimated 400+ line reduction
 
 ## Contributing
 

@@ -48,7 +48,7 @@ our @EXPORT_OK = qw(
     $ALLOW_SCRIPTING $COLLAPSE_OPTION
     $READ_FULL $KEEP_LINES $FAST_FORWARD
     $PRECISION
-    get_number_format
+    get_number_format trim normalize parse_line_ranges
 );
 
 our %EXPORT_TAGS = (

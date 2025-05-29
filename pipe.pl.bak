@@ -41,10 +41,8 @@ use lib './lib';
 use lib '../lib';
 use Pipe::Core qw(trim get_number_format);
 use Pipe::Context;
-use Pipe::IO qw(:output :encoding);
+use Pipe::IO qw(:output :processing :encoding);
 use Pipe::Column qw(:all);
-use Pipe::Text;
-use Pipe::Match qw(:all);
 
 binmode STDOUT;
 binmode STDERR;
@@ -103,7 +101,7 @@ my @AVG_COLUMNS       = (); my $avg_ref       = {}; my $avg_count = {};
 my @DDUP_COLUMNS      = (); my $ddup_ref      = {};
 my @CASE_COLUMNS      = (); my $case_ref      = {};
 my @REPLACE_COLUMNS   = (); my $replace_ref   = {}; # Replacement columns and content. Handled like -f.
-our @COND_CMP_COLUMNS  = (); our $cond_cmp_ref  = {}; # case switching expressions like uc,lc,mc.
+my @COND_CMP_COLUMNS  = (); my $cond_cmp_ref  = {}; # case switching expressions like uc,lc,mc.
 my @TRIM_COLUMNS      = ();
 my @ORDER_COLUMNS     = ();
 my @NORMAL_COLUMNS    = ();
@@ -115,7 +113,7 @@ my @PAD_COLUMNS       = (); my $pad_ref       = {}; # Stores the pad instruction
 my @FLIP_COLUMNS      = (); my $flip_ref      = {}; # Stores the flip instructions by column number.
 my @FORMAT_COLUMNS    = (); my $format_ref    = {}; # Stores the format instructions by column number.
 my @MATCH_COLUMNS     = (); my $match_ref     = {}; # Stores regular expressions.
-our @NOT_MATCH_COLUMNS = (); our $not_match_ref = {}; # Stores regular expressions for -G.
+my @NOT_MATCH_COLUMNS = (); my $not_match_ref = {}; # Stores regular expressions for -G.
 my $IS_X_MATCH        = 0;                          # True if -X matched.
 my $H_MATCH           = -1;                          # between -X and -Y are output on the same line.
 my @FRAME_BUFFER      = ();                         # Store the lines that match 
@@ -126,10 +124,10 @@ my @MATCH_START_COLS  = (); my $match_start_ref= {};# Stores each columns IS_MAT
 my @MATCH_Y_COLUMNS   = (), my $match_y_ref    = {}; # Look ahead -Y test conditions supplied by user.
 my @U_ENCODE_COLUMNS  = (); my $url_characters = {}; # Stores the character mappings.
 my @MERGE_COLUMNS     = (); # List of columns to merge. The first is the anchor column.
-our @EMPTY_COLUMNS     = (); # empty column number checks.
-our @SHOW_EMPTY_COLUMNS= (); # Show empty column number checks.
-our @COMPARE_COLUMNS   = (); # Compare all collected columns and report if equal.
-our @NO_COMPARE_COLUMNS= (); # ! Compare all collected columns and report if equal.
+my @EMPTY_COLUMNS     = (); # empty column number checks.
+my @SHOW_EMPTY_COLUMNS= (); # Show empty column number checks.
+my @COMPARE_COLUMNS   = (); # Compare all collected columns and report if equal.
+my @NO_COMPARE_COLUMNS= (); # ! Compare all collected columns and report if equal.
 my $START_OUTPUT      = 0;
 my $END_OUTPUT        = 0;
 my $TAIL_OUTPUT       = 0; # Is this a request for the tail of the file.
@@ -473,6 +471,123 @@ sub parse_single_column_single_argument( $ )
     exit( 0 );
 }
 
+# Reads the values supplied on the command line and parses them out into the argument list,
+# and populates the appropriate hash reference of column qualifiers hash-reference.
+# param:  command line string of requested columns.
+# param:  hash reference of column names and qualifiers.
+# param:  is_allowed string that specifies a keyword like $KEYWORD_ANY.
+# return: New array.
+sub read_requested_qualified_columns
+{
+    my $line             = shift;
+    my @list             = ();
+    my $hash_ref         = shift;
+    my @allowed_keywords = @_;
+    # Since we can't split if there is no delimiter character, let's introduce one if there isn't one.
+    $line .= "," if ( $line !~ m/,/ );
+    # To accommodate expressions that include a ',' as part of the mask split on non-escaped ','s
+    # we use a negative look behind.
+    my @cols = split( m/(?<!\\),/, $line );
+    foreach my $colNum ( @cols )
+    {
+        # Columns are designated with 'c' prefix to get over the problem of perl not recognizing
+        # '0' as a legitimate column number.
+        if ( $colNum =~ m/^c\d{1,}/i )
+        {
+            $colNum =~ s/[C|c]//; # get rid of the 'c' because it causes problems later.
+            # We now allow other characters, and possibly ':' so split the line on the first one only.
+            my @nameQualifier = ();
+            if ( $colNum =~ m/:/ )
+            {
+                push @nameQualifier, $`;
+                push @nameQualifier, $';
+            }
+            if ( scalar @nameQualifier != 2 )
+            {
+                print STDERR "*** Error missing qualifier '$colNum'. ***\n";
+                exit;
+            }
+            push( @list, trim( $nameQualifier[0] ) );
+            # Add the qualifier to the hash reference too for reference later.
+            # The ',' char is a field delimiter and has to be escaped, but in regex it has a different meaning and has to be un-escaped.
+            $nameQualifier[1] =~ s/\\,/,/g;
+            $hash_ref->{$nameQualifier[0]} = trim( $nameQualifier[1] );
+        }
+        elsif ( $colNum =~ m/any/ && grep /($KEYWORD_ANY)/, @allowed_keywords )
+        {
+            my @nameQualifier = ();
+            if ( $colNum =~ m/:/ )
+            {
+                push @nameQualifier, $`;
+                push @nameQualifier, $';
+            }
+            if ( scalar @nameQualifier != 2 )
+            {
+                print STDERR "*** Error missing qualifier '$colNum'. ***\n";
+                exit;
+            }
+            @list = ();
+            push( @list, trim( $nameQualifier[0] ) );
+            ## Add the qualifier to the hash reference too for reference later.
+            ## The ',' char is a field delimiter and has to be escaped, but in regex it has a different meaning and has to be un-escaped.
+            $nameQualifier[1] =~ s/\\,/,/g;
+            $hash_ref->{$KEYWORD_ANY} = trim( $nameQualifier[1] );
+            last;
+        }
+        elsif ( $colNum =~ m/num_cols/i && grep /($KEYWORD_NUM_COLS)/, @allowed_keywords )
+        {
+            my @nameQualifier = ();
+            if ( $colNum =~ m/:/ )
+            {
+                push @nameQualifier, $`;
+                push @nameQualifier, $';
+            }
+            if ( scalar @nameQualifier != 2 )
+            {
+                print STDERR "*** Error missing qualifier '$colNum'. ***\n";
+                exit;
+            }
+            @list = ();
+            push( @list, trim( $nameQualifier[0] ) );
+            ## Add the qualifier to the hash reference too for reference later.
+            ## The ',' char is a field delimiter and has to be escaped, but in regex it has a different meaning and has to be un-escaped.
+            $nameQualifier[1] =~ s/\\,/,/g;
+            $hash_ref->{$KEYWORD_NUM_COLS} = trim( $nameQualifier[1] );
+            last;
+        }
+        elsif ( $colNum =~ m/(add|sub|mul|div)/i )
+        {
+            my ( $operator, $column_string ) = '';
+            if ( $colNum =~ m/:/ )
+            {
+                $operator      = $`;
+                $column_string = $';
+            }
+            # printf STDERR "--> '%s' and '%s' <--\n", $operator, $column_string;
+            if ( not $operator || not $column_string )
+            {
+                print STDERR "*** Syntax error at '$colNum'. ***\n";
+                exit();
+            }
+            @list = ();
+            push( @list, trim( $column_string ) );
+            push( @list, @cols[1 .. @cols -1] );
+            $hash_ref->{$operator} = 1;
+            last;
+        }
+        else
+        {
+            print STDERR "** Warning: illegal column designation '$colNum', ignoring.\n";
+        }
+    }
+    if ( scalar(@list) == 0 )
+    {
+        print STDERR "*** Error no valid columns selected. ***\n";
+        exit;
+    }
+    print STDERR "columns requested: '@list'\n" if ( $opt{'D'} );
+    return @list;
+}
 
 # Parses the ranges of lines requested by the user.
 # parse the user's instructions and print out the lines selected.
@@ -631,6 +746,19 @@ sub read_requested_columns
 # alphabetic characters into upper case.
 # param:  any string.
 # return: input string with spaces removed and in upper case.
+sub normalize( $ )
+{
+    my $line = shift;
+    $line =~ s/\W+//g;
+    if ( $opt{'I'} )
+    {
+        return $line;
+    }
+    else
+    {
+        return uc $line;
+    }
+}
 
 # Trim function to remove white space from the start and end of the string.
 # This function is now imported from Pipe::Core
@@ -737,12 +865,192 @@ sub average( $ )
 # Removes the white space from of specified columns.
 # param:  line to pull out columns from.
 # return: <none>.
+sub trim_line( $ )
+{
+    my $line = shift;
+    if ( $TRIM_COLUMNS[0] =~ m/($KEYWORD_ANY)/i )
+    {
+        foreach my $colIndex ( 0 .. scalar( @{ $line } ) -1 )
+        {
+            if ( $opt{'y'} )
+            {
+                @{ $line }[ $colIndex ] = trim( @{ $line }[ $colIndex ], $PRECISION );
+            }
+            else
+            {
+                @{ $line }[ $colIndex ] = trim( @{ $line }[ $colIndex ] );
+            }
+        }
+        return;
+    }
+    foreach my $colIndex ( @TRIM_COLUMNS )
+    {
+        if ( defined @{ $line }[ $colIndex ] )
+        {
+            if ( $opt{'y'} )
+            {
+                @{ $line }[ $colIndex ] = trim( @{ $line }[ $colIndex ], $PRECISION );
+            }
+            else
+            {
+                @{ $line }[ $colIndex ] = trim( @{ $line }[ $colIndex ] );
+            }
+        }
+    }
+}
 
 # Normalizes specified columns, removing non-word characters.
 # param:  line of columns of data.
 # return: <none>.
+sub normalize_line( $ )
+{
+    my $line = shift;
+    if ( $NORMAL_COLUMNS[0] =~ m/($KEYWORD_ANY)/i )
+    {
+        foreach my $colIndex ( 0 .. scalar( @{ $line } ) -1 )
+        {
+            @{ $line }[ $colIndex ] = normalize( @{ $line }[ $colIndex ] );
+        }
+        return;
+    }
+    foreach my $colIndex ( @NORMAL_COLUMNS )
+    {
+        if ( defined @{ $line }[ $colIndex ] )
+        {
+            @{ $line }[ $colIndex ] = normalize( @{ $line }[ $colIndex ] );
+        }
+    }
+}
 
+# Places specified columns in a different order.
+# param:  line to pull out columns from.
+# return: <none>.
+sub order_line( $ )
+{
+    my $line          = shift;
+    my @newLine       = ();
+    my @order_columns = ();
+    my $count         = 0; # Keep track of the index of the your index in the line. Used for 'continue' keyword in -o.
+    foreach my $c ( @ORDER_COLUMNS )
+    {
+        # If the keyword any is used push all the missing columns of the line onto @order_columns.
+        # Other lines might have different numbers of columns.
+        # now add all the columns that aren't on the array already.
+        if ( $c =~ m/($KEYWORD_REMAINING)/i )
+        {
+            foreach my $colIndex ( 0 .. scalar( @{ $line } ) -1 )
+            {
+                next if ( grep { $colIndex eq $_ } @order_columns );
+                push @order_columns, $colIndex;
+            }
+            last;
+        }
+        # Add all the rest of the columns from the input line.
+        elsif ( $c =~ m/($KEYWORD_CONTINUE)/i )
+        {
+            # Use the last saved array index to 
+            foreach my $colIndex ( $count .. scalar( @{ $line } ) -1 )
+            {
+                push @order_columns, $colIndex;
+            }
+            last;
+        }
+        # Return the last column from the list.
+        elsif ( $c =~ m/($KEYWORD_LAST)/i )
+        {
+            push @order_columns, -1;
+            last;
+        }
+        elsif ( $c =~ m/($KEYWORD_REVERSE)/i )
+        {
+            foreach my $colIndex ( 0 .. scalar( @{ $line } ) -1 )
+            {
+                push @order_columns, $colIndex;
+            }
+            @order_columns = reverse @order_columns;
+            last;
+        }
+        elsif ( $c =~ m/($KEYWORD_EXCLUDE)/i || $RELAX_o_EXCLUDE ) # 'exclude' is the first value.
+        {
+            # this value is set from the first time we encounter 'exclude'.
+            if ( $RELAX_o_EXCLUDE )
+            {
+                foreach my $colIndex ( 0 .. scalar( @{ $line } ) -1 )
+                {
+                    push @order_columns, $colIndex if ( ! grep { $colIndex eq $_ } @ORDER_COLUMNS );
+                }
+                last;
+            }
+            else # This is the first time we encounter 'exclude' so set the variable, and the next
+                 # iteration of the loop the set variable will cause the rest of the loop to 
+            {
+                $RELAX_o_EXCLUDE = 1;
+            }
+        }
+        else # Standard column output ordering request, and all column ordering requests before 'remaining'.
+        {
+            push @order_columns, $c;
+        }
+        # To get here the value has to have been numeric, save it in case the continue keyword is used,
+        # then use it to output all the columns from the last index to the end of the line.
+        $count = $c +1 if ( ! $RELAX_o_EXCLUDE ); # The exclude keyword appears first, but ignore it.
+    }
+    if ( $opt{'D'} )
+    {
+        printf STDERR "order of columns: ";
+        foreach my $c ( @order_columns )
+        {
+            printf STDERR "%d, ", $c;
+        }
+        printf STDERR "\n";
+    }
+    foreach my $colIndex ( @order_columns )
+    {
+        if ( defined @{ $line }[ $colIndex ] )
+        {
+            push @newLine, @{ $line }[ $colIndex ];
+        }
+    }
+    @{ $line } = ();
+    push @{ $line }, @newLine;
+}
 
+# Returns the key composed of the selected fields.
+# param:  string line of values from the input.
+# param:  List of desired fields, or columns.
+# return: string composed of each string selected as column pasted together without trailing spaces.
+sub get_key( $$ )
+{
+    my $line          = shift;
+    my $wantedColumns = shift;
+    my $key           = "";
+    my @columns = split( /\|/, $line );
+    # If the line only has one column that is couldn't be split then return the entire line as
+    # key. Duplicate lines will be removed only if they match entirely.
+    if ( scalar( @columns ) < 2 )
+    {
+        return $line;
+    }
+    my @newLine = ();
+    # Pull out the values from the line that will make up the key for storage in a hash table.
+    for ( my $i = 0; $i < scalar( @{$wantedColumns} ); $i++ )
+    {
+        my $j = ${$wantedColumns}[ $i ];
+        if ( defined $columns[ $j ] and exists $columns[ $j ] )
+        {
+            my $cols = $columns[ $j ];
+            # Remove the sub delimiter if the user requested -W.
+            $cols =~ s/($SUB_DELIMITER)/\|/g;
+            $cols = lc( $cols ) if ( $opt{ 'I' } );
+            # And new replace them since they may be used in another process.
+            $cols =~ s/\|/$SUB_DELIMITER/g;
+            push( @newLine, $cols );
+        }
+    }
+    # it doesn't matter what we use as a delimiter as long as we are consistent.
+    $key = join( '', @newLine );
+    return $key;
+}
 
 # Test if argument is a number between 0-100.
 # param:  number to test.
@@ -773,8 +1081,8 @@ sub sort_list( $ )
     {
         my $line = shift @ALL_LINES;
         chomp $line;
-        my $key = Pipe::Column::get_key( $line, $wantedColumns );
-        $key = Pipe::Text::normalize( $key ) if ( $opt{'N'} );
+        my $key = get_key( $line, $wantedColumns );
+        $key = normalize( $key ) if ( $opt{'N'} );
         # Make the value.00000001 to make each key unique. If value is a number, sort numeric works.
         # Where this breaks is if the values you want to sort are floats. In that case we should just
         # add more least significant digits.
@@ -838,46 +1146,1011 @@ sub sort_list( $ )
 # param:  String - target of masking operation, the string data from this column.
 # param:  String - mask specification.
 # return: String modified by mask.
+sub apply_mask( $$ )
+{
+    my $column_string = shift;
+    return '' if ( ! $column_string ); # return if there is no string to mask on.
+    my $column_mask   = shift;
+    # Test if user wants the data inserted into the above string as-is.
+    if ( $column_mask =~ m/@/ )
+    {
+        my $amp_index = index( $column_mask, '@' );
+        return substr( $column_mask, 0, $amp_index ) . $column_string . substr( $column_mask, ($amp_index + 1) );
+    }
+    my ( @chars, @mask ) = ();
+    @chars = split '', $column_string;
+    @mask  = split '', $column_mask;
+    my @word  = ();
+    my $mask_char = '#'; # pre-load so if -m'c0:' will default output line.
+    while ( @mask )
+    {
+        $mask_char = shift @mask if ( @mask );
+        if ( $mask_char eq '\\' ) # Literally the characters '#' or '_', not their special meaning in this context.
+        {
+            push @word, shift @mask if ( @mask );
+        }
+        elsif ( $mask_char eq '_' )
+        {
+            shift @chars if ( @chars );
+        }
+        elsif ( $mask_char eq '#' )
+        {
+            push @word, shift @chars if ( @chars );
+        }
+        else
+        {
+            push @word, $mask_char;
+        }
+    }
+    # Output the remainder of the string if the string ends with '#'
+    push @word, @chars if ( @chars and $mask_char eq '#' );
+    my $word_str = join '', @word;
+    # If precision is set on this then take the result and add a decimal at $PRECISION
+    # places from the end of the string. Used to quickly add fractional parts of numbers
+    # but works on alphabetic strings too.
+    if ( $opt{ 'y' } && $PRECISION <= length $word_str )
+    {
+        my $tmp_str = substr( $word_str, 0, ( length($word_str) - $PRECISION ) );
+        $word_str =~ s/($tmp_str)/$1\./;
+    }
+    return $word_str;
+}
 
 # Outputs masked column data as per specification. See usage().
 # param:  String of line data - pipe-delimited.
 # return: <none>.
+sub mask_line( $ )
+{
+    my $line = shift;
+    my $i    = 0;
+     # We fill any line field index with the same normalization values to ensure 'any' is honored reliably and cheaply.
+    if ( exists $mask_ref->{$KEYWORD_ANY} )
+    {
+        for ( $i = 0; $i < scalar( @{ $line } ); $i++ )
+        {
+            $mask_ref->{ $i } = $mask_ref->{$KEYWORD_ANY} if ( not exists $mask_ref->{ $i } );
+        }
+    }
+    # Special case where we want to add a mask to the last column like: '1|2|', and 
+    # that column is empty. The size of the example here is 3.
+    for ( $i = 0; $i <= scalar( @{ $line } ); $i++ )
+    {
+        if ( exists $mask_ref->{ $i } )
+        {
+            @{ $line }[ $i ] = apply_mask( @{ $line }[ $i ], $mask_ref->{ $i } );
+        }
+    }
+}
 
 # Outputs sub strings of column data as per specification. See usage().
 # param:  String of line data - pipe-delimited.
 # return: string with table formatting.
+sub sub_string_line( $ )
+{
+    my $line = shift;
+    my $i    = 0;
+    for ( $i = 0; $i < scalar( @{ $line } ); $i++ )
+    {
+        if ( exists $subs_ref->{ $i } )
+        {
+            @{ $line }[ $i ] = sub_string( @{ $line }[ $i ], $subs_ref->{ $i } );
+        }
+    }
+}
 
 # Outputs sub strings of column data as per specification. See usage().
 # param:  String of line data - pipe-delimited.
 # return: string with table formatting.
+sub sub_string( $ )
+{
+    my $input_string= shift;
+    my @field       = split '', $input_string;
+    my $instruction = shift;
+    my @newField    = ();
+    my @indexes     = ();
+    printf STDERR "SUBSTR: '%s'.\n", $instruction if ( $opt{'D'} );
+    # We will save all the indexes of characters we need. To do that we need to
+    # convert '-' to ranges.
+    my @subInstructions = split '\.', $instruction;
+    while ( @subInstructions )
+    {
+        my $sub_instruction = shift @subInstructions;
+        if ( $sub_instruction =~ m/^\s?\d+\s?$/ )
+        {
+            push @indexes, $&;
+            next;
+        }
+        printf STDERR "got subinstruction string '%s' .\n", $sub_instruction if ( $opt{'D'} );
+        my $last_n_chars_exp = '';
+        if ( $sub_instruction =~ m/\(n\s?\-\s?\d{1,}\)$/i ) # does the expression end with '(n -int)'?
+        {                                                                  # chop the -int number of characters.
+            $last_n_chars_exp = $&;
+            $sub_instruction  = $`;
+            # Find how many characters to chop from the end of the line.
+            $last_n_chars_exp =~ m/\d{1,}/;
+            my $trailing_char_count = sprintf "%d", $&;
+            $input_string = substr( $input_string, 0, (length($input_string) - $trailing_char_count ));
+            printf STDERR "\$last_n_chars_exp='%s', \$input_string='%s'\n", $last_n_chars_exp, $input_string if ( $opt{'D'} );
+        }
+        if ( $sub_instruction =~ m/\-/ )
+        {
+            my $start = $`,
+            my $end   = $';
+            printf STDERR "got value '%s' and '%s'.\n", $start, $end if ( $opt{'D'} );
+            # test end first, start depends on end in the case of a leading '-'.
+            if ( $end =~ m/\d+/ )
+            {
+                $end = sprintf "%d", $&; # strips out just the number.
+            }
+            elsif ( $end eq '' ) # If the '-' was the trailing character. This will have precedence to select the rest of the string.
+            {
+                $end = length $input_string;
+            }
+            else
+            {
+                printf STDERR "*** error invalid end of range specification at '%s'.\n", $end;
+                exit;
+            }
+            if ( $start =~ m/\d+/ )
+            {
+                $start = sprintf "%d", $&; # strips out just the number.
+            }
+            elsif ( $start eq '' ) # If the '-' was the leading character. This will indicate the last characters of the string.
+            {
+                $start = length( $input_string ) - $end;
+                $end = $start + $end;
+                # and if the user specified a value greater than the length of the string let's reset the start.
+                $start = 0 if ( $start < 0 );
+            }
+            else
+            {
+                printf STDERR "*** error invalid start of range specification at '%s'.\n", $start;
+                exit;
+            }
+            printf STDERR "computed start '%d'.\n", $start if ( $opt{'D'} );
+            printf STDERR "computed end   '%d'.\n", $end if ( $opt{'D'} );
+            # now pack the indices onto the array
+            my $i = 0;
+            if ( $start > $end )
+            {
+                for ( $i = $start; $i >= $end; $i-- ) # >= so we can specify the 0th element.
+                {
+                    push @indexes, $i;
+                }
+            }
+            else
+            {
+                for ( $i = $start; $i < $end; $i++ )
+                {
+                    push @indexes, $i;
+                }
+            }
+        }
+        else # not expected format.
+        {
+            printf STDERR "*** error invalid range specification at '%s'.\n", $sub_instruction;
+            exit;
+        }
+    }
+    while ( @indexes )
+    {
+        my $index = shift @indexes;
+        push @newField, $field[$index] if ( defined $field[$index] );
+    }
+    return join '', @newField;
+}
 
+# Greps specific columns for a given Perl pattern. See usage().
+# param:  String of line data - pipe-delimited.
+# param:  Hash reference of regular expressions.
+# param:  List of columns to test.
+# return: 1 if match found in column data and 0 otherwise.
+sub is_match( $$$ )
+{
+    my $line           = shift;
+    my $regex_hash_ref = shift;  # Can be -X or -Y reference of regular expressions.
+    my $match_columns  = shift;
+    my $matchCount     = 0;
+    if ( @{ $match_columns }[0] =~ m/($KEYWORD_ANY)/i )
+    {
+        if ( $opt{'D'} )
+        {
+            if ( exists $regex_hash_ref->{ $KEYWORD_ANY } && $regex_hash_ref->{ $KEYWORD_ANY } )
+            {
+                printf STDERR "regex: '%s' \n", $regex_hash_ref->{ $KEYWORD_ANY };
+            }
+            else
+            {
+                printf STDERR "regex: '[unset]' \n";
+            }
+        }
+        my $return_value = 0;
+        foreach my $colIndex ( 0 .. scalar( @{ $line } ) -1 )
+        {
+            if ( $opt{'I'} ) # Ignore case on search
+            {
+                if ( @{ $line }[ $colIndex ] =~ m/($regex_hash_ref->{ $KEYWORD_ANY })/i )
+                {
+                    if ( $return_value > 0 and $opt{'5'} )
+                    {
+                        printf STDERR "%s%s", $DELIMITER, @{ $line }[ $colIndex ];
+                    }
+                    elsif ( $opt{'5'} )
+                    {
+                        printf STDERR "%s", @{ $line }[ $colIndex ];
+                    }
+                    $return_value = 1;
+                }
+            }
+            else
+            {
+                if ( @{ $line }[ $colIndex ] =~ m/($regex_hash_ref->{ $KEYWORD_ANY })/ )
+                {
+                    if ( $return_value > 0 and $opt{'5'} ) # Add a pipe to the output if matched.
+                    {
+                        printf STDERR "%s%s", $DELIMITER, @{ $line }[ $colIndex ];
+                    }
+                    elsif ( $opt{'5'} )
+                    {
+                        printf STDERR "%s", @{ $line }[ $colIndex ];
+                    }
+                    $return_value = 1;
+                }
+            }
+            # Quick exit if -g match and -5 not selected.
+            last if ( $return_value and ! $opt{'5'} );
+        }
+        printf STDERR "\n" if ( $return_value > 0 and $opt{'5'} ); # print return because we found at least 1 match on this line.
+        return $return_value;
+    }
+    foreach my $colIndex ( @{ $match_columns } )
+    {
+        if ( defined @{ $line }[ $colIndex ] )
+        {
+            if ( $opt{'D'} )
+            {
+                if ( exists $regex_hash_ref->{ $colIndex } && $regex_hash_ref->{ $colIndex } )
+                {
+                    printf STDERR "regex: '%s' \n", $regex_hash_ref->{ $colIndex };
+                }
+                else
+                {
+                    printf STDERR "regex: '[unset]' \n";
+                }
+            }
+            if ( $regex_hash_ref->{ $colIndex } )
+            {
+                if ( $opt{'I'} ) # Ignore case on search
+                {
+                    $matchCount++ if ( @{ $line }[ $colIndex ] =~ m/($regex_hash_ref->{ $colIndex })/i );
+                }
+                else
+                {
+                    $matchCount++ if ( @{ $line }[ $colIndex ] =~ m/($regex_hash_ref->{ $colIndex })/ );
+                }
+            }
+            else ### If the regex is empty imply the first specified column regex should be tested on
+                 ### this column's data.
+            {
+                if ( $regex_hash_ref->{ @{ $match_columns }[0] } )
+                {
+                    if ( $opt{'I'} ) # Ignore case on search
+                    {
+                        $matchCount++ if ( @{ $line }[ $colIndex ] =~ m/($regex_hash_ref->{ @{ $match_columns }[0] })/i );
+                    }
+                    else
+                    {
+                        $matchCount++ if ( @{ $line }[ $colIndex ] =~ m/($regex_hash_ref->{ @{ $match_columns }[0] })/ );
+                    }
+                }
+                else ### If the first regex is empty then compare the defined columns value to the other columns.
+                {
+                    if ( $opt{'I'} ) # Ignore case on search
+                    {
+                        $matchCount++ if ( @{ $line }[ $colIndex ] =~ m/(@{$line}[0])/i );
+                    }
+                    else
+                    {
+                        $matchCount++ if ( @{ $line }[ $colIndex ] =~ m/(@{$line}[0])/ );
+                    }
+                }
+            }
+        }
+    }
+    # This ensures an AND type operation, that all the requested columns matched. Remove test for count if you want OR.
+    return 1 if ( $matchCount == scalar @{ $match_columns } and $matchCount > 0 ); # Count of matches should match count of column match requests.
+    return 0;
+}
 
+# Inverse grep specific columns for a given Perl pattern. See usage().
+# param:  String of line data - pipe-delimited.
+# return: line if the pattern matched and nothing if it didn't.
+sub is_not_match( $ )
+{
+    my $line = shift;
+    if ( $NOT_MATCH_COLUMNS[0] =~ m/($KEYWORD_ANY)/i )
+    {
+        if ( $opt{'D'} )
+        {
+            if ( exists $not_match_ref->{ $KEYWORD_ANY } && $not_match_ref->{ $KEYWORD_ANY } )
+            {
+                printf STDERR "regex: '%s' \n", $not_match_ref->{ $KEYWORD_ANY };
+            }
+            else
+            {
+                printf STDERR "regex: '[unset]' \n";
+            }
+        }
+        foreach my $colIndex ( 0 .. scalar( @{ $line } ) -1 )
+        {
+            if ( $opt{'I'} ) # Ignore case on search
+            {
+                return 0 if ( @{ $line }[ $colIndex ] =~ m/($not_match_ref->{ $KEYWORD_ANY })/i );
+            }
+            else
+            {
+                return 0 if ( @{ $line }[ $colIndex ] =~ m/($not_match_ref->{ $KEYWORD_ANY })/ );
+            }
+        }
+        return 1;
+    }
+    foreach my $colIndex ( @NOT_MATCH_COLUMNS )
+    {
+        if ( defined @{ $line }[ $colIndex ] )
+        {
+            if ( $opt{'D'} )
+            {
+                if ( exists $not_match_ref->{ $colIndex } && $not_match_ref->{ $colIndex } )
+                {
+                    printf STDERR "regex: '%s' \n", $not_match_ref->{ $colIndex };
+                }
+                else
+                {
+                    printf STDERR "regex: '[unset]' \n";
+                }
+            }
+            if ( $not_match_ref->{ $colIndex } )
+            {
+                if ( $opt{'I'} ) # Ignore case on search
+                {
+                    return 0 if ( @{ $line }[ $colIndex ] =~ m/($not_match_ref->{ $colIndex })/i );
+                }
+                else
+                {
+                    return 0 if ( @{ $line }[ $colIndex ] =~ m/($not_match_ref->{ $colIndex })/ );
+                }
+            }
+            else ### If the regex is empty imply the first specified column regex should be tested on
+                 ### this column's data.
+            {
+                if ( $not_match_ref->{ $NOT_MATCH_COLUMNS[0] } )
+                {
+                    if ( $opt{'I'} ) # Ignore case on search
+                    {
+                        return 0 if ( @{ $line }[ $colIndex ] =~ m/($not_match_ref->{ $NOT_MATCH_COLUMNS[0] })/i );
+                    }
+                    else
+                    {
+                        return 0 if ( @{ $line }[ $colIndex ] =~ m/($not_match_ref->{ $NOT_MATCH_COLUMNS[0] })/ );
+                    }
+                }
+                elsif ( $colIndex > 0 ) ### If the first regex is empty then compare the defined columns value to the other columns. But don't compare the first column with the first column because that always succeeds!
+                {
+                    if ( $opt{'I'} ) # Ignore case on search
+                    {
+                        return 0 if ( @{ $line }[ $colIndex ] =~ m/(@{$line}[0])/i );
+                    }
+                    else
+                    {
+                        printf STDERR "-G '%s' CMP '%s'\n", @{ $line }[ $colIndex ], @{$line}[0]  if ( $opt{'D'} );
+                        return 0 if ( @{ $line }[ $colIndex ] =~ m/(@{$line}[0])/ );
+                    }
+                }
+            }
+        }
+    }
+    return 1;
+}
 
+# Tests if a line is empty of content. Empty includes column doesn't exist and or is empty.
+# param:  string (line) to test.
+# return: 1 if there is a non-empty field, and 0 otherwise.
+sub is_empty( $ )
+{
+    my $line = shift;
+    printf STDERR "EMPTY_LINE: " if ( $opt{'D'} );
+    foreach my $colIndex ( @EMPTY_COLUMNS )
+    {
+        return 1 if ( ! defined @{ $line }[ $colIndex ] );
+        printf STDERR "'%s', ", @{ $line }[ $colIndex ] if ( $opt{'D'} );
+        return 1 if ( trim( @{ $line }[ $colIndex ] ) =~ m/^$/ );
+    }
+    printf STDERR "\n" if ( $opt{'D'} );
+    return 0;
+}
 
+# Tests if a line is empty of content. Empty includes column doesn't exist and or is empty.
+# param:  string (line) to test.
+# return: 1 if there is a empty field, and 0 otherwise.
+sub is_not_empty( $ )
+{
+    my $line = shift;
+    printf STDERR "SHOW_EMPTY_LINE: " if ( $opt{'D'} );
+    foreach my $colIndex ( @SHOW_EMPTY_COLUMNS )
+    {
+        return 0 if ( ! defined @{ $line }[ $colIndex ] );
+        printf STDERR "'%s', ", @{ $line }[ $colIndex ] if ( $opt{'D'} );
+        return 0 if ( trim( @{ $line }[ $colIndex ] ) =~ m/^$/ );
+    }
+    printf STDERR "\n" if ( $opt{'D'} );
+    return 1;
+}
 
+# Compares requested fields and returns line if they match.
+# param:  string, pipe delimited line.
+# param:  list of column indexes to compare on.
+# return: 1 if the fields matched and 0 otherwise.
+sub contain_same_value( $$ )
+{
+    my $line = shift;
+    my $wantedColumns = shift;
+    printf STDERR "CMP_LINE: " if ( $opt{'D'} );
+    my $lastValue = '';
+    my $matchCount = 0;
+    foreach my $colIndex ( @{$wantedColumns} )
+    {
+        if ( ! $lastValue )
+        {
+            $lastValue = @{ $line }[ $colIndex ] if ( defined @{ $line }[ $colIndex ] && @{ $line }[ $colIndex ] );
+            next;
+        }
+        printf STDERR "IS_MATCHED: '%s' cmp '%s' \n", $lastValue, "UNDEFINED" if ( ! defined @{ $line }[ $colIndex ] &&  $opt{'D'} );
+        printf STDERR "IS_MATCHED: '%s' cmp '%s' \n", $lastValue, @{ $line }[ $colIndex ] if ( defined @{ $line }[ $colIndex ] && $opt{'D'} );
+        if ( $opt{'I'} )
+        {
+            return 0 if ( ! defined @{ $line }[ $colIndex ] || @{ $line }[ $colIndex ] !~ /^($lastValue)$/i );
+        }
+        else
+        {
+            return 0 if ( ! defined @{ $line }[ $colIndex ] || @{ $line }[ $colIndex ] !~ /^($lastValue)$/ );
+        }
+    }
+    printf STDERR "IS_MATCHED: '%d'\n", $matchCount if ( $opt{'D'} );
+    return 1;
+}
 
 # Applies padding to a given field.
 # param:  string field to pad.
 # param:  padding instructions.
 # return: padded field.
+sub apply_padding( $$ )
+{
+    my $field       = shift;
+    my $instruction = shift;
+    my @newField    = '';
+    my ( $token, $replacement ) = split( m/(?<!\\)\./, $instruction );
+    printf STDERR "instruction:  '%s' \n", $instruction if ( $opt{'D'} );
+    # The $replacement string should preserve requests for space characters.
+    if ( ! defined $replacement )
+    {
+        printf STDERR "*** syntax error in padding instruction: '%s'\n", $instruction;
+        exit;
+    }
+    $replacement =~ s/\\s/\x20/g;
+    $replacement =~ s/\\t/\x09/g;
+    $replacement =~ s/\\n/\x0A/g;
+    $replacement =~ s/_DOT_/./g;
+    printf STDERR "pad expression: '%s' places of '%s' \n", $token, $replacement if ( $opt{'D'} );
+    my $count = 0;
+    my $character = $replacement;
+    if ( $token =~ m/^[+|-]?\d{1,}/ )
+    {
+        $count = sprintf "%d", $token;
+    }
+    else
+    {
+        printf STDERR "*** syntax error in padding instruction: '%s'\n", $instruction;
+        exit;
+    }
+    return $field if ( abs($count) <= length $field );
+    my @chars = split '', $field;
+    if ( $count < 0 ) # Goes on end
+    {
+        $count = abs( $count );
+        for ( my $i = 0; $i < $count; $i++ )
+        {
+            while ( @chars )
+            {
+                push @newField, shift @chars;
+                $i++;
+            }
+            push @newField, $character;
+        }
+    }
+    else # goes on front
+    {
+        @chars = reverse @chars;
+        for ( my $i = 0; $i < $count; $i++ )
+        {
+            while ( @chars )
+            {
+                push @newField, shift @chars;
+                $i++;
+            }
+            push @newField, $character;
+        }
+        @newField = reverse @newField;
+    }
+    return join '', @newField;
+}
 
 # Outputs padded column data as per specification. See usage().
 # Syntax: n.c, where n is an integer (either + for leading, or - for trailing), '.' and character(s) to
 # be used as padding.
 # param:  String of line data - pipe-delimited.
 # return: string with padded formatting.
+sub pad_line( $ ) # remove split
+{
+    my $line = shift;
+    my $i    = 0;
+    for ( $i = 0; $i < scalar( @{ $line } ); $i++ )
+    {
+        # my $field = shift @line;
+        if ( exists $pad_ref->{ $i } )
+        {
+            @{ $line }[ $i ] = apply_padding( @{ $line }[ $i ], $pad_ref->{ $i } );
+        }
+    }
+}
 
+# Subroutine to compute parameter ranges. Accepts a string where
+# ranges are expected to be two real numbers separated by a '-'
+# character.
+# param:  string of range definition. '-2-4.14', '-2--4', '2-4', and '2-+4'
+#         the same, and all are valid examples.
+# return: @range where $range[0] is the start of the range, and 
+#         $range[1] is the end of the range. There is no guarantee
+#         the end is smaller or larger than the end.
+sub _get_range_( $ )
+{
+    my $rangeString = shift;
+    # Search for the first '-' after character 1 in case the number is negative.
+    my $rg_pos = index($rangeString, '-', 1);
+    my @range = ();
+    $range[0] = substr($rangeString, 0, $rg_pos);
+    $range[1] = substr($rangeString, $rg_pos + 1);
+    printf STDERR "range arg='%s' len(range)=%d '%d' and '%d'\n", $rangeString, scalar(@range), $range[0], $range[1] if ( $opt{'D'} );
+    if ( scalar @range != 2 )
+    {
+        printf STDERR "**error, malformed range operator '%s'.\n", $rangeString;
+        exit(1);
+    }
+    # Confirm range values are real numbers.
+    if ( $range[0] !~ m/^[+|-]?\d{1,}(\.\d{1,})?$/ || $range[1] !~ m/^[+|-]?\d{1,}(\.\d{1,})?$/ )
+    {
+        printf STDERR "**error, range requires both start and end to be integers, but got '%s'.\n", $rangeString;
+        exit(1);
+    }
+    # Order the range from smallest to end with largest.
+    if ( $range[0] > $range[1] )
+    {
+        my $swp = $range[0];
+        $range[0] = $range[1];
+        $range[1] = $swp;
+    }
+    $range[0] += 0; # Turn them into numbers.
+    $range[1] += 0;
+    return @range;
+}
 
+# Tests and returns failure or success depending on expression value.
+# param:  comparison operator (lt|gt|lt|eq|ge|le).
+# param:  the value of comparison, what the data will be measured against.
+# parma:  data from a column.
+# return: 1 on success and 0 otherwise.
+sub test_condition_cmp( $$$ )
+{
+    my $cmpOperator = shift;
+    my $cmpValue    = shift ;
+    my $value       = shift;
+    my $result      = 0;
+    if ( $opt{'N'} )  # Normalize, which preserves case.
+    {
+        $value = normalize( $value );
+        $cmpValue = normalize( $cmpValue );
+    }
+    if ( $opt{'I'} )  # Normalize, which preserves case.
+    {
+        $value = uc $value;
+        $cmpValue = uc $cmpValue;
+    }
+    printf STDERR "'%s' '%s' '%s'.\n", $cmpValue, $cmpOperator, $value if ( $opt{'D'} );
+    if ( $cmpOperator =~ m/^rg$/i || $cmpOperator =~ m/^width$/i )
+    {
+        my @range = _get_range_( $cmpValue );
+        if ( $cmpOperator =~ m/^rg$/i )
+        {
+            $result = 1 if ( $value >= $range[0] && $value <= $range[1] );
+        }
+        elsif ( $cmpOperator =~ m/^width$/i )
+        {
+            $result = 1 if ( length($value) >= $range[0] && length($value) <= $range[1] );
+        }
+    }
+    elsif ( $value =~ m/^[+|-]?\d{1,}(\.\d{1,})?$/ && $cmpValue =~ m/^[+|-]?\d{1,}(\.\d{1,})?$/ )
+    {
+        if ( $cmpOperator eq 'eq' )
+        {
+            $result = 1 if ( $value == $cmpValue );
+        }
+        elsif ( $cmpOperator eq 'lt' )
+        {
+            $result = 1 if ( $value < $cmpValue );
+        }
+        elsif ( $cmpOperator eq 'gt' )
+        {
+            $result = 1 if ( $value > $cmpValue );
+        }
+        elsif ( $cmpOperator eq 'le' )
+        {
+            $result = 1 if ( $value <= $cmpValue );
+        }
+        elsif ( $cmpOperator eq 'ge' )
+        {
+            $result = 1 if ( $value >= $cmpValue );
+        }
+        elsif ( $cmpOperator eq 'ne' )
+        {
+            $result = 1 if ( $value != $cmpValue );
+        }
+        else
+        {
+            printf STDERR "*** error invalid operation '%s'.\n", $cmpOperator if ( $opt{'D'} );
+            exit;
+        }
+    }
+    else
+    {
+        if ( $opt{'U'} ) # request comparison on numbers 'U' only so ignore this one.
+        {
+            printf STDERR "* comparison fails on non-numeric value: '%s' and '%s' \n", $value, $cmpValue if ( $opt{'D'} );
+            return 0;
+        }
+        if ( $cmpOperator eq 'eq' )
+        {
+            $result = 1 if ( $value eq $cmpValue );
+        }
+        elsif ( $cmpOperator eq 'lt' )
+        {
+            $result = 1 if ( $value lt $cmpValue );
+        }
+        elsif ( $cmpOperator eq 'gt' )
+        {
+            $result = 1 if ( $value gt $cmpValue );
+        }
+        elsif ( $cmpOperator eq 'le' )
+        {
+            $result = 1 if ( $value le $cmpValue );
+        }
+        elsif ( $cmpOperator eq 'ge' )
+        {
+            $result = 1 if ( $value ge $cmpValue );
+        }
+        elsif ( $cmpOperator eq 'ne' )
+        {
+            $result = 1 if ( $value ne $cmpValue );
+        }
+        else
+        {
+            printf STDERR "*** error invalid operation '%s'.\n", $cmpOperator if ( $opt{'D'} );
+            exit;
+        }
+    }
+    return $result;
+}
 
+# Tests the values in a given field using lt, gt, eq, le, ge, ne, rg, or width.
+# param:  String of line data - pipe-delimited.
+# return: line if the specified condition was met and nothing if it didn't.
+sub test_condition( $ )
+{
+    my $line = shift;
+    my $result = 0;
+    if ( $COND_CMP_COLUMNS[0] =~ m/($KEYWORD_NUM_COLS)/i )
+    {
+        # The next keyword allowed is stored on the conditional compare ref, in
+        # bucket $KEYWORD_NUM_COLS. It should start with 'width...' but can be
+        # extended.
+        my $exp = $cond_cmp_ref->{$KEYWORD_NUM_COLS};
+        if ( $exp =~ m/^width/i )
+        {
+            my $cmpValue = $';
+            my @range = _get_range_( $cmpValue );
+            if ( scalar( @{ $line } ) >= $range[0] && scalar( @{ $line } ) <= $range[1] )
+            {
+                $result = 1;
+            }
+        }
+        else
+        {
+            printf STDERR "*** error invalid comparison '%s'\n", $cond_cmp_ref->{$KEYWORD_NUM_COLS};
+        }
+        return $result;
+    }
+    if ( $COND_CMP_COLUMNS[0] =~ m/($KEYWORD_ANY)/i )
+    {
+        my $exp = $cond_cmp_ref->{$KEYWORD_ANY};
+        # The first 2 characters determine the type of comparison.
+        $exp =~ m/(cc)?(lt|gt|eq|ge|le|ne|rg|width)/i;
+        if ( ! $& )
+        {
+            printf STDERR "*** error invalid comparison '%s'\n", $cond_cmp_ref->{$KEYWORD_ANY};
+            exit;
+        }
+        my $cmpValue    = $'; # in the case of 'rg' there could be a comma seperated value '0+197'
+        my $cmpOperator = $&;
+        # Change compare value to the value in a different column (if exists) and requested.
+        if ( $exp =~ m/^cc/i )
+        {
+            # we are expecting a col definition like (c|C)\d+, so get that column number
+            # strip it if supplied, but the 'c' is optional, but good form.
+            $cmpValue =~ s/^c//i;
+            if ( defined $cmpValue && $cmpValue =~ m/^\d+$/ )
+            {
+                if ( defined @{ $line }[ $cmpValue ] )
+                {
+                    $cmpValue = @{ $line }[ $cmpValue ];
+                }
+                else
+                {
+                    printf STDERR "* warn requested column in '%s' doesn't exist.\n", $cmpValue if ( $opt{'D'} );
+                    return $result;
+                }
+            }
+            else
+            {
+                printf STDERR "*** error malformed column requested '%s'.\n", $cmpValue;
+                exit;
+            }
+        }
+        foreach my $colIndex ( 0 .. scalar( @{ $line } ) -1 )
+        {
+            return 1 if( test_condition_cmp( $cmpOperator, $cmpValue, @{ $line }[ $colIndex ] ) );
+        }
+        return $result;
+    }
+    foreach my $colIndex ( @COND_CMP_COLUMNS )
+    {
+        if ( defined @{ $line }[ $colIndex ] and exists $cond_cmp_ref->{ $colIndex } )
+        {
+            my $exp = $cond_cmp_ref->{$colIndex};
+            # The first 2 characters determine the type of comparison.
+            $exp =~ m/(lt|gt|eq|ge|le|ne|rg|width|num_cols)/i;
+            if ( ! $& )
+            {
+                printf STDERR "*** error invalid comparison '%s'\n", $cond_cmp_ref->{$colIndex};
+                exit;
+            }
+            my $cmpValue    = $';
+            my $cmpOperator = $&;
+            # since the m// compares on 'lt' etc, only the exact match is kept in '$&'.
+            # This allows us to prefix the operation with almost any keyword combination.
+            if ( $exp =~ m/^cc/i )
+            {
+                # we are expecting a col definition like (c|C)\d+, so get that column number
+                # strip it if supplied, but the 'c' is optional, but good form.
+                $cmpValue =~ s/^c//i;
+                if ( defined $cmpValue && $cmpValue =~ m/^\d+$/ )
+                {
+                    if ( defined @{ $line }[ $cmpValue ] )
+                    {
+                        $cmpValue = @{ $line }[ $cmpValue ];
+                    }
+                    else
+                    {
+                        printf STDERR "* warn requested column in '%s' doesn't exist.\n", $cmpValue if ( $opt{'D'} );
+                        return $result;
+                    }
+                }
+                else
+                {
+                    printf STDERR "*** error malformed column requested '%s'.\n", $cmpValue;
+                    exit;
+                }
+            }
+            $result += test_condition_cmp( $cmpOperator, $cmpValue, @{ $line }[ $colIndex ] );
+        }
+    }
+    # All requested tests succeeded if the result count matches the number of test requests.
+    return 1 if ( scalar( @COND_CMP_COLUMNS ) == $result );
+    return 0;
+}
 
 # Switches casing based on values supplied.
 # param:  String field to be modified.
 # param:  casing string expression. Must be one of [mc|lc|uc].
 # return: New string with changes if any.
+sub apply_casing( $$ )
+{
+    my $field       = shift;
+    my $instruction = shift;
+    if ( $instruction =~ m/uc/i )
+    {
+        $field = uc $field;
+    }
+    if ( $instruction =~ m/lc/i )
+    {
+        $field = lc $field;
+    }
+    if ( $instruction =~ m/mc/i )
+    {
+        $field =~ s/([\w']+)/\u\L$1/g;
+    }
+    if ( $instruction =~ m/us/i )
+    {
+        $field =~ s/\s/_/g;
+    }
+    # Replace multiple space characters with a single space.
+    if ( $instruction =~ m/spc/i )
+    {
+        $field =~ s/\s+/\x20/g;
+    }
+    # Replace ,:\| - or pipe.pl sensitive caracters.
+    if ( $instruction =~ m/pipe/i )
+    {
+        # Add additional characters if required.
+        $field =~ s/([,:\|])//g;
+    }
+    if ( $instruction =~ m/^csv$/i )
+    {
+        # remove commas from quoted strings.
+        my @segments = split /"/, $field;  # fix SO syntax highlighting: "
+        s/,/ /g for @segments[ grep $_ % 2, 0 .. $#segments ];
+        $field = join '"', @segments;
+    }
+    if ( $instruction =~ m/^normal_/i )
+    {
+        # Take the next part of the string as the operation for the string.
+        my @normal_cmds = split '\|', $';
+        foreach my $normal ( @normal_cmds )
+        {
+            my $exps = '\\'.$normal;
+            if ( $normal =~ m/Q/ )
+            {
+                $exps = '\"';
+            }
+            elsif ( $normal =~ m/q/ )
+            {
+                $exps = '\'';
+            }
+            # Remove all punctuation leaving only upper/lower case chars, digits, and spaces.
+            elsif ( $normal =~ m/P/ )
+            {
+                $exps = '[^a-zA-Z0-9 ]';
+            }
+            # Convert CSV data into (pipe by default) delimited-data.
+            if ( $normal =~ m/csv/i )
+            {
+                $exps = ',\s*(?=([^"]*"[^"]*")*[^"]*$)';
+                $field =~ s/($exps)/$DELIMITER/g;
+                $field =~ s/['"]//g;
+            }
+            else # Substitute character sequences with empty spaces.
+            {
+                $field =~ s/($exps)//g;
+            }
+        }
+    }
+    if ( $instruction =~ m/^order_/i )
+    {
+        # Take the next part of the string as the operation for the string {xyz}-{zyx}.
+        # Each character from the first paren set is stored as a key in table 'a'. Repeated characters add as a new index
+        # to an existing keyed value in table 'a'. The process is repeated for the output character ordering, storing the
+        # values in a table 'b'. Once done, take the positions stored in table 'a' and map them to table 'b's new positions.
+        my @order_vars = split /-/, $';
+        my @from = split //, $order_vars[0];
+        my @to   = split //, $order_vars[1];
+        my $a_ref = {};
+        my $b_ref = {};
+        my $index = 0;
+        # For each variable char, save the index of its position on a string.
+        # Later we will split the string and put field together in that order.
+        foreach my $f ( @from )
+        {
+            $a_ref->{$f} .= $index.',';
+            $index++;
+        }
+        $index = 0;
+        # Store the preferred order.
+        foreach my $t ( @to )
+        {
+            $b_ref->{$t} .= $index.',';
+            $index++;
+        }
+        # a_ref->{'y'} = 0,1,2,3, b_ref->{'y'} = 5,6,7,8,
+        # now take the keys from a_ref
+        ## TODO: Finish by matching the correct ordering 
+        my @old_field = split //, $field;
+        my @new_field = split //, $field;
+        while ( my ($key, $new_value) = each(%$b_ref) )
+        {
+            # The new_value contains the new ordering of the character indices.
+            # For example: 4,5 which means that $new_field[0]=$old_field[4]
+            if ( ! exists $a_ref->{$key} )
+            {
+                printf STDERR "**error, unmatched variable name '%s' in input for ordering with -e flag.\n", $key;
+                exit 0;
+            }
+            my $old_value = $a_ref->{$key};
+            my $new_value = $b_ref->{$key};
+            chop $old_value; # Cut off the trailing ','
+            chop $new_value; # Cut off the trailing ','
+            print "\$old_value=$old_value\n" if ( $opt{'D'} );
+            print "\$new_value=$new_value\n" if ( $opt{'D'} );
+            my @index_old = split /,/, $old_value;
+            my @index_new = split /,/, $new_value;
+            if ( scalar @index_old != scalar @index_new )
+            {
+                printf STDERR "**error, mismatch variable length for '%s' while using -e flag.\n", $key;
+                exit 0;
+            }
+            while ( @index_old )
+            {
+                my $i = shift @index_old;
+                my $j = shift @index_new;
+                $new_field[$j] = $old_field[$i] if ( defined $i && defined $old_field[$i] );
+            }
+        }
+        $field = join '', @new_field;
+    }
+    return $field;
+}
 
 # Modifies the case of a string.
 # param:  line from file.
 # return: <none>.
+sub modify_case_line( $ )
+{
+    my $line = shift;
+    my $i    = 0;
+    # We fill any line field index with the same normalization values to ensure 'any' is honored reliably and cheaply.
+    if ( exists $case_ref->{$KEYWORD_ANY} )
+    {
+        for ( $i = 0; $i < scalar( @{ $line } ); $i++ )
+        {
+            $case_ref->{ $i } = $case_ref->{$KEYWORD_ANY} if ( not exists $case_ref->{ $i } );
+        }
+    }
+    my $exp;
+    for ( $i = 0; $i < scalar( @{ $line } ); $i++ )
+    {
+        if ( exists $case_ref->{ $i } )
+        {
+            printf STDERR "case specifier: '%s' \n", $case_ref->{ $i } if ( $opt{'D'} );
+            $exp = $case_ref->{ $i };
+            # The first 2 characters determine the type of casing.
+            $exp =~ m/^(uc|lc|mc|us|spc|csv|pipe|normal_|order_|collapse)/i;
+            if ( ! $& )
+            {
+                printf STDERR "*** error case specifier. Expected (csv|lc|mc|uc|us|spc|csv|pipe|normal_(W|w,S|s,D|d,p|q|Q)|order_{xyz}-{zyx}|collapse) but got '%s'.\n", $case_ref->{ $i };
+                exit;
+            }
+            @{ $line }[ $i ] = apply_casing( @{ $line }[ $i ], $exp );
+        }
+    }
+    if ( $exp eq 'collapse' ) 
+    {
+        # Later pipe will enforce width of columns.
+        $COLLAPSE_OPTION = 1;
+        my @clean = ();
+        foreach my $v ( @{ $line } )
+        {
+            # Preserve '0' values.
+            push( @clean, $v ) if ( defined $v && length $v );
+        }
+        @{ $line } = @clean;
+    }
+}
 
 # Flips Flips an arbitrary but specific character Conditionally,
 # where 'n' is the 0-based index of the target character. A '?' means
@@ -887,6 +2160,48 @@ sub sort_list( $ )
 # '0001' -f'c0:3.B?0.c' => '000c'.
 # param:  line from file.
 # return: <none>.
+sub flip_char_line( $ )
+{
+    my $line = shift;
+    my $i    = 0;
+    for ( $i = 0; $i < scalar( @{ $line } ); $i++ )
+    {
+        if ( exists $flip_ref->{ $i } )
+        {
+            printf STDERR "flip expression: '%s' \n", $flip_ref->{ $i } if ( $opt{'D'} );
+            my $exp = $flip_ref->{ $i };
+            my $char_index;
+            my $test;
+            my $condition_true;
+            my $condition_false;
+            if ( $exp =~ m/\?/ )
+            {
+                ( $char_index, $test ) = split '\.', $`;
+                ( $condition_true, $condition_false ) = split( m/(?<!\\)\./, $' );
+                $condition_true   =~ s/\\//g; # Strip off the '\' if the delimiter '.' is part of the change.
+                $condition_false     =~ s/\\//g if ( defined $condition_false );
+            }
+            else # simple case of n.p
+            {
+                ( $char_index, $test ) = split '\.', $exp;
+            }
+            if ( ! defined $char_index or ! defined $test )
+            {
+                printf STDERR "*** syntax error in -f, expected '{integer index}.{test|value}' but got '%s'\n", $exp;
+                exit;
+            }
+            if ( $opt{'D'} )
+            {
+                printf STDERR " index='%s'", $char_index if ( defined $char_index );
+                printf STDERR " value='%s'", $test if ( defined $test );
+                printf STDERR " true='%s'", $condition_true if ( defined $condition_true );
+                printf STDERR " false='%s'", $condition_false if ( defined $condition_false );
+                printf STDERR "\n";
+            }
+            @{ $line }[ $i ] = apply_flip( @{ $line }[ $i ], $char_index, $test, $condition_true, $condition_false );
+        }
+    }
+}
 
 # Flips the specified character to the provided alternate character.
 # param:  String containing the site of the target character.
@@ -895,14 +2210,160 @@ sub sort_list( $ )
 # param:  character condition to be met before replacing.
 # param:  character replacement if condition not met.
 # return: String with the specified modifications.
+sub apply_flip
+{
+    my ( $field, $char_index, $test_char, $condition_true, $condition_false ) = @_;
+    # field, char_index and test_char must be defined, condition_true and condition_false may not be.
+    if ( $char_index !~ m/^\d{1,}$/ )
+    {
+        printf STDERR "*** syntax error in -f, expected integer index but got '%s'\n", $char_index;
+        exit;
+    }
+    my @f = split //, $field;
+    return $field if ( $char_index >= @f ); # if the char_index site is past the end of the field just return it untouched.
+    my $site = $f[ $char_index ];
+    if ( defined $condition_true )
+    {
+        if ( $opt{'I'} )
+        {
+            $test_char = lc $test_char;
+            $site = lc $site;
+        }
+        if ( $site eq $test_char )
+        {
+            $f[ $char_index ] = $condition_true;
+        }
+        else
+        {
+            if ( defined $condition_false )
+            {
+                $f[ $char_index ] = $condition_false;
+            }
+        }
+    }
+    else # Unconditionally change the site's character.
+    {
+        $f[ $char_index ] = $test_char;
+    }
+    return join '', @f;
+}
 
 # Replaces one string for another.
 # param:  line from file.
 # return: <none>.
+sub replace_line( $ )
+{
+    my $line = shift;
+    my $i    = 0;
+    for ( $i = 0; $i < scalar( @{ $line } ); $i++ )
+    {
+        if ( exists $replace_ref->{ $i } )
+        {
+            printf STDERR "replace expression: '%s' \n", $replace_ref->{ $i } if ( $opt{'D'} );
+            my $exp = $replace_ref->{ $i };
+            my $replacement;
+            my $condition;
+            my $on_else;
+            if ( $exp =~ m/\?/ )
+            {
+                ( $condition, $replacement, $on_else ) = split( m/(?<!\\)\./, $' );
+                $condition   =~ s/\\//g; # Strip off the '\' if the delimiter '.' is selected as a condition, replace or else character.
+                $replacement =~ s/\\//g;
+                $on_else     =~ s/\\//g if ( defined $on_else );
+            }
+            else # simple case of 'n.p'
+            {
+                $replacement = $exp;
+            }
+            if ( ! defined $replacement )
+            {
+                printf STDERR "*** syntax error in -E, expected replacement string but got '%s'\n", $exp;
+                exit;
+            }
+            if ( $opt{'D'} )
+            {
+                if ( defined $condition )
+                {
+                    printf STDERR " condition='%s'", $condition;
+                    if ( defined $replacement )
+                    {
+                        printf STDERR " replacement='%s'", $replacement;
+                        printf STDERR " else='%s'", $on_else if ( defined $on_else );
+                    }
+                }
+                elsif ( defined $replacement ) # just an index and a replacement character.
+                {
+                    printf STDERR " replacement='%s'", $replacement;
+                }
+                printf STDERR "\n";
+            }
+            @{ $line }[ $i ] = replace( @{ $line }[ $i ], $replacement, $condition, $on_else );
+        }
+    }
+}
 
 # Applies a translation to specified column(s).
 # param:  line of pipe delimited columns.
 # return: <none>.
+sub translate_line( $ )
+{
+    my $line = shift;
+    my $i    = 0;
+    if ( $TRANSLATE_COLUMNS[0] =~ m/($KEYWORD_ANY)/i )
+    {
+        my $exp = $trans_ref->{ $KEYWORD_ANY };
+        my ( $token, $replacement ) = split( m/(?<!\\)\./, $exp );
+        # The $replacement string should preserve requests for space characters.
+        if ( ! defined $replacement )
+        {
+            printf STDERR "*** syntax error in translation instruction: '%s'\n", $exp;
+            exit;
+        }
+        $replacement =~ s/\\s/\x20/i;
+        $replacement =~ s/\\t/\x09/i;
+        $replacement =~ s/\\n/\x0A/i;
+        printf STDERR "translate expression: '%s' replaced with '%s' \n", $trans_ref->{ $i }, $replacement if ( $opt{'D'} );
+        
+        foreach my $colIndex ( 0 .. scalar( @{ $line } ) -1 )
+        {
+            if ( $opt{'I'} )
+            {
+                @{ $line }[ $colIndex ] =~ s/($token)/$replacement/gi;
+            }
+            else
+            {
+                @{ $line }[ $colIndex ] =~ s/($token)/$replacement/g;
+            }
+        }
+        return;
+    }
+    for ( $i = 0; $i < scalar( @{ $line } ); $i++ )
+    {
+        if ( exists $trans_ref->{ $i } )
+        {
+            my $exp = $trans_ref->{ $i };
+            my ( $token, $replacement ) = split( m/(?<!\\)\./, $exp );
+            # The $replacement string should preserve requests for space characters.
+            if ( ! defined $replacement )
+            {
+                printf STDERR "*** syntax error in translation instruction: '%s'\n", $exp;
+                exit;
+            }
+            $replacement =~ s/\\s/\x20/i;
+            $replacement =~ s/\\t/\x09/i;
+            $replacement =~ s/\\n/\x0A/i;
+            printf STDERR "translate expression: '%s' replaced with '%s' \n", $trans_ref->{ $i }, $replacement if ( $opt{'D'} );
+            if ( $opt{'I'} )
+            {
+                @{ $line }[ $i ] =~ s/($token)/$replacement/gi;
+            }
+            else
+            {
+                @{ $line }[ $i ] =~ s/($token)/$replacement/g;
+            }
+        }
+    }
+}
 
 # This function fixes lines that have trailing empty pipe columns. If it is not used
 # lines are truncated after the last content-filled column.
@@ -950,6 +2411,31 @@ sub validate( $$$ )
 # param:  condition to test target string.
 # param:  replacement string on failure of conditional testing.
 # return: resultant string.
+sub replace( $$$$ )
+{
+    my ( $field, $replacement, $condition, $on_else ) = @_;
+    if ( defined $condition )
+    {
+        if ( $condition eq $field or ( $opt{'I'} and lc( $condition ) eq lc( $field ) ) )
+        {
+            printf STDERR "* '%s'\n", $replacement if ( $opt{'D'} );
+            return $replacement;
+        }
+        elsif ( defined $on_else )
+        {
+            printf STDERR "* '%s'\n", $on_else if ( $opt{'D'} );
+            return $on_else;
+        }
+        else
+        {
+            printf STDERR "* '%s'\n", $field if ( $opt{'D'} );
+            return $field;
+        }
+    }
+    # Unconditionally change the site's character.
+    printf STDERR "* '%s'\n", $replacement if ( $opt{'D'} );
+    return $replacement;
+}
 
 # Applies format to requested string.
 # param:  String for conversion.
@@ -1263,7 +2749,7 @@ sub histogram( $ )
         if ( defined @{ $line }[ $colIndex ] )
         {
             printf STDERR "stored column:%s\n", @{ $line }[ $colIndex ] if ( $opt{'D'} );
-            my $range_whole_number = Pipe::Column::read_whole_number( @{ $line }[ $colIndex ] );
+            my $range_whole_number = read_whole_number( @{ $line }[ $colIndex ] );
             my @new_string = ();
             foreach my $i ( 1..$range_whole_number )
             {
@@ -1278,6 +2764,35 @@ sub histogram( $ )
 # param:  column to select within line. Like 'c2'.
 # param:  line of input.
 # return: numerical value to be added to the running total.
+sub get_column_value( $$ )
+{
+    my $wantedColumn  = shift;
+    my $line          = shift;
+    $wantedColumn     =~ s/c//i;
+    # Make sure the user entered a '[c|C]n'
+    if ( $wantedColumn !~ m/^\d{1,}$/ )
+    {
+        printf STDERR "** invalid column selection for summation over groups: '%s'.\n", $wantedColumn;
+        exit;
+    }
+    my @columns = split( '\|', $line );
+    if ( defined $columns[ $wantedColumn ] )
+    {
+        # The user may have requested -W so there may be SUB_DELIMITERs in string.
+        $columns[ $wantedColumn ] =~ s/($SUB_DELIMITER)/\|/g;
+        my $trimmed_column = trim( $columns[ $wantedColumn ] );
+        if ( $trimmed_column =~ m/^[+|-]?\d{1,}(\.\d{1,})?$/ )
+        {
+            return $trimmed_column;
+        }
+        else
+        {
+            printf STDERR "* warning value in column not numeric: '%s'.\n", $columns[ $wantedColumn ] if ( $opt{'D'} );
+        }
+    }
+
+    return 0;
+}
 
 # Formats a value into a string suitable for display. In the case of a float it provides
 # 2 decimal place precision, and if the value is an integer, no decimals places are added.
@@ -1359,9 +2874,9 @@ sub dedup_list( $ )
     {
         my $line = shift @ALL_LINES;
         chomp $line;
-        my $key = Pipe::Column::get_key( $line, $wantedColumns );
+        my $key = get_key( $line, $wantedColumns );
         $key = lc( $key ) if ( $opt{'I'} );
-        $key = Pipe::Text::normalize( $key ) if ( $opt{'N'} );
+        $key = normalize( $key ) if ( $opt{'N'} );
         $ddup_ref->{ $key } = $line;
         if ( $opt{'A'} )
         {
@@ -1381,7 +2896,7 @@ sub dedup_list( $ )
                 $J_CMD = lc($&);
                 $opt{'J'} = $';
             }
-            my $val = Pipe::Column::get_column_value( $opt{'J'}, $line );
+            my $val = get_column_value( $opt{'J'}, $line );
             $count->{ $key } = do_op( $key, $count->{ $key }, $val );
         }
         print STDERR "\$key=$key, \$value=$line\n" if ( $opt{'D'} );
@@ -1495,40 +3010,6 @@ sub randomize_list()
     }
 }
 
-# Performs operations that require the entire file to be read
-# This includes deduplication, sorting, randomization, and averaging  
-# param: None (operates on global variables)
-# return: None
-sub finalize_full_read_functions()
-{
-    if ( $opt{'d'} )
-    {
-        dedup_list( \@DDUP_COLUMNS );
-    }
-    if ( $opt{'r'} ) # select 'n'% of file at random for output.
-    {
-        randomize_list();
-    }
-    if ( $opt{'s'} )# Sort the items from STDIN.
-    {
-        # We have a list of lines. We will split them creating a key that we append to the start with a delimiter of ''
-        # When it comes time to sort use the default sort in perl and then remove the prefix.
-        sort_list( \@SORT_COLUMNS );
-    }
-    if ( $opt{'v'} ) # Compute averages now we have read the entire input.
-    {
-        foreach my $column ( keys %{$avg_ref} )
-        {
-            if ( exists $avg_count->{ $column } and $avg_count->{ $column } != 0 )
-            {
-                my $result = sprintf "%.3f", ( $avg_ref->{ $column } / $avg_count->{ $column } );
-                # replace the previous column sum with the average.
-                $avg_ref->{ $column } = $result;
-            }
-        }
-    }
-}
-
 # After you have finished reading and processing all lines in the input file
 # this function will manage the output.
 # param:  <none>
@@ -1572,6 +3053,25 @@ sub is_printable_range( $$ )
 # Performs URL encoding of given columns.
 # param:  line from input.
 # return: <none>.
+sub url_encode_line( $ )
+{
+    my $line = shift;
+    if ( $U_ENCODE_COLUMNS[0] =~ m/($KEYWORD_ANY)/i )
+    {
+        foreach my $colIndex ( 0 .. scalar( @{ $line } ) -1 )
+        {
+            @{ $line }[ $colIndex ] = Pipe::IO::map_url_characters( @{ $line }[ $colIndex ] ) if ( @{ $line }[ $colIndex ] );
+        }
+        return;
+    }
+    foreach my $colIndex ( @U_ENCODE_COLUMNS )
+    {
+        if ( defined @{ $line }[ $colIndex ] )
+        {
+            @{ $line }[ $colIndex ] = Pipe::IO::map_url_characters( @{ $line }[ $colIndex ] );
+        }
+    }
+}
 
 # Builds a map of URL characters to URL encoded values.
 # param:  <none>
@@ -1582,8 +3082,80 @@ sub is_printable_range( $$ )
 # param:  String of either 'HEAD' or 'FOOT'.
 # return: <none>
 
+# Merges other columns' data into a specific column.
+# param:  Original line input.
+# return: <none>.
+sub merge_line( $ )
+{
+    my $line = shift;
+    my $i    = 0;
+    if ( $MERGE_COLUMNS[ 0 ] =~ m/($KEYWORD_ANY)/i )
+    {
+        printf STDERR "merge: '%s' \n", $KEYWORD_ANY if ( $opt{'D'} );
+        @{ $line }[ 0 ] = join '', @{ $line };
+        return;
+    }
+    if ( ! defined $MERGE_COLUMNS[ 0 ] or ! defined @{ $line }[ $MERGE_COLUMNS[ 0 ] ] )
+    {
+        printf STDERR "** warning: merge target 'c%s' doesn't exist in line '%s...'.\n", $MERGE_COLUMNS[ 0 ], @{ $line }[0] if ( $opt{'D'} );
+    }
+    # The rest of the columns are to be appended to @{ $line }[ $MERGE_COLUMNS[ 0 ] ]
+    for ( $i = 1; $i < scalar( @{ $line } ); $i++ )
+    {
+        if ( defined $MERGE_COLUMNS[ $i ] and defined @{ $line }[ $MERGE_COLUMNS[ $i ] ] )
+        {
+            printf STDERR "merge: '%s' \n", @{ $line }[ $MERGE_COLUMNS[ $i ] ] if ( $opt{'D'} );
+            @{ $line }[ $MERGE_COLUMNS[ 0 ] ] .= @{ $line }[ $MERGE_COLUMNS[ $i ] ];
+        }
+    }
+}
 
+# Tests if argument is a whole number and returns it if is, and exits if not.
+# param:  string value of a numeric value.
+# param:  do not exit if defined.
+# return: number, or exits with warning if the value isn't a whole number.
+sub read_whole_number( $ )
+{
+    my $input = shift;
+    my $value = get_number_format( $input, 1 );
+    printf STDERR "argument to read_whole_number()='%s' \n", $value if ( $opt{'D'} );
+    return 0 if ( $value eq '' );
+    return $value if ( $value );
+    printf STDERR "*** error: invalid argument, expected a whole number, but got '%s' \n", $input;
+    exit( -1 );
+}
 
+# If there is data selected for extraction from the file argument (to '-0') 
+# merge that data with the input line as required.
+# param:  Input line read from STDIN.
+# return: None. Side effect; appends the true or false column data from the
+#         the file argument specified with '-0'.
+sub merge_reference_file( $ )
+{
+    my $line = shift;
+    # Compare columns from STDIN and look up the values in the reference file
+    # by comparing columns in @MERGE_SRC_COLUMNS and @MERGE_REF_COLUMNS,
+    # allowing for '-I', and '-N' operators.
+    my $key = '';
+    return if ( ! defined $MERGE_SRC_COLUMNS[0] );
+    my $src_col = $MERGE_SRC_COLUMNS[0];
+    # There may not even be such a column so test.
+    return if ( ! defined @{$line}[$src_col] );
+    # Normalize, and make case insensitive if required here.
+    $key = @{$line}[$src_col];
+    $key = uc $key if ( $opt{'I'} ); # Compare key in upper case if '-I'.
+    $key = normalize( $key ) if ( $opt{'N'} );
+    # Okay there is a column in the STDIN doc, but is there one in the reference doc?
+    if ( exists $REF_FILE_DATA_HREF->{ $key } )
+    {
+        push @{$line}, split ',', $REF_FILE_DATA_HREF->{ $key };
+    }
+    else
+    {
+        push @{$line}, @REF_LITERALS_FALSE;  # which may be empty.
+    }
+    printf STDERR "KEY: '%s'\n", $key if ( $opt{'D'} );
+}
 
 # This function abstracts all line operations for line by line operations.
 # param:  line from file.
@@ -1606,12 +3178,12 @@ sub process_line( $ )
     }
     if ( $opt{'X'} || $opt{'Y'} )
     {
-        if ( $opt{'Y'} && $IS_X_MATCH && Pipe::Match::is_match( \@columns, $match_y_ref, \@MATCH_Y_COLUMNS ) )
+        if ( $opt{'Y'} && $IS_X_MATCH && is_match( \@columns, $match_y_ref, \@MATCH_Y_COLUMNS ) )
         {
             $IS_Y_MATCH = 1;
             $continue_to_process_match = 0;
         }
-        if ( $opt{'X'} && Pipe::Match::is_match( \@columns, $match_start_ref, \@MATCH_START_COLS ) )
+        if ( $opt{'X'} && is_match( \@columns, $match_start_ref, \@MATCH_START_COLS ) )
         {
             $continue_to_process_match = 1;
             $IS_X_MATCH = 1;
@@ -1621,7 +3193,7 @@ sub process_line( $ )
         {
             push @FRAME_BUFFER, $line if ( $opt{'g'} ); # Don't fill the buffer unless -g is used.
         }
-        if ( $opt{'g'} && $IS_X_MATCH && Pipe::Match::is_match( \@columns, $match_ref, \@MATCH_COLUMNS ) )
+        if ( $opt{'g'} && $IS_X_MATCH && is_match( \@columns, $match_ref, \@MATCH_COLUMNS ) )
         {
             $IS_DUMPABLE_MATCH = 1;
         }
@@ -1683,7 +3255,7 @@ sub process_line( $ )
                 unshift @PREVIOUS_LINES, $line;
                 pop @PREVIOUS_LINES if ( @PREVIOUS_LINES && scalar @PREVIOUS_LINES > $BUFF_SIZE );
             }
-            if ( ! ( Pipe::Match::is_match( \@columns, $match_ref, \@MATCH_COLUMNS ) and Pipe::Match::is_not_match( \@columns ) ) )
+            if ( ! ( is_match( \@columns, $match_ref, \@MATCH_COLUMNS ) and is_not_match( \@columns ) ) )
             {
                 if ( $opt{'i'} )
                 {
@@ -1695,7 +3267,7 @@ sub process_line( $ )
                 }
             }
         }
-        elsif ( $opt{'g'} and ! Pipe::Match::is_match( \@columns, $match_ref, \@MATCH_COLUMNS ) )
+        elsif ( $opt{'g'} and ! is_match( \@columns, $match_ref, \@MATCH_COLUMNS ) )
         {
             if ( $opt{'Q'} )
             {
@@ -1712,7 +3284,7 @@ sub process_line( $ )
                 return '';
             }
         }
-        elsif ( $opt{'G'} and ! Pipe::Match::is_not_match( \@columns ) )
+        elsif ( $opt{'G'} and ! is_not_match( \@columns ) )
         {
             if ( $opt{'Q'} )
             {
@@ -1751,7 +3323,7 @@ sub process_line( $ )
     }
     if ( $opt{'C'} )
     {
-        if ( ! Pipe::Match::test_condition( \@columns ) )
+        if ( ! test_condition( \@columns ) )
         {
             if ( $opt{'i'} )
             {
@@ -1769,7 +3341,7 @@ sub process_line( $ )
     }
     if ( $opt{'b'} )
     {
-        if ( ! Pipe::Match::contain_same_value( \@columns, \@COMPARE_COLUMNS ) )
+        if ( ! contain_same_value( \@columns, \@COMPARE_COLUMNS ) )
         {
             if ( $opt{'i'} )
             {
@@ -1787,7 +3359,7 @@ sub process_line( $ )
     }
     if ( $opt{'B'} )
     {
-        if ( Pipe::Match::contain_same_value( \@columns, \@NO_COMPARE_COLUMNS ) )
+        if ( contain_same_value( \@columns, \@NO_COMPARE_COLUMNS ) )
         {
             if ( $opt{'i'} )
             {
@@ -1805,7 +3377,7 @@ sub process_line( $ )
     }
     if ( $opt{'z'} )
     {
-        if ( Pipe::Match::is_empty( \@columns ) )
+        if ( is_empty( \@columns ) )
         {
             if ( $opt{'i'} )
             {
@@ -1823,7 +3395,7 @@ sub process_line( $ )
     }
     if ( $opt{'Z'} )
     {
-        if ( Pipe::Match::is_not_empty( \@columns ) )
+        if ( is_not_empty( \@columns ) )
         {
             if ( $opt{'i'} )
             {
@@ -1841,29 +3413,29 @@ sub process_line( $ )
     }
     if ( $continue_to_process_match )  ##### Majority of the testing and operations take place in this block.
     {
-        Pipe::Column::merge_reference_file( \@columns )   if ( $IS_DATA_TO_MERGE ); ## -M + -0
+        merge_reference_file( \@columns )   if ( $IS_DATA_TO_MERGE ); ## -M + -0
         inc_line( \@columns  )              if ( $opt{'1'} );
         inc_line_by_value( \@columns )      if ( $opt{'3'} );
         delta_previous_line( \@columns )    if ( $opt{'4'} );
         execute_script_line( \@columns  )   if ( $opt{'k'} );
-        Pipe::Text::modify_case_line( \@columns, $case_ref ) if ( $opt{'e'} );
-        Pipe::Text::replace_line( \@columns )           if ( $opt{'E'} );
-        Pipe::Text::flip_char_line( \@columns )         if ( $opt{'f'} );
+        modify_case_line( \@columns  )      if ( $opt{'e'} );
+        replace_line( \@columns )           if ( $opt{'E'} );
+        flip_char_line( \@columns )         if ( $opt{'f'} );
         format_radix( \@columns )           if ( $opt{'F'} );
-        Pipe::Text::url_encode_line( \@columns )        if ( $opt{'u'} );
-        Pipe::Text::translate_line( \@columns )         if ( $opt{'l'} );
-        Pipe::Text::mask_line( \@columns )              if ( $opt{'m'} );
-        Pipe::Text::sub_string_line( \@columns )        if ( $opt{'S'} );
-        Pipe::Text::normalize_line( \@columns, \@NORMAL_COLUMNS ) if ( $opt{'n'} );
-        Pipe::Text::trim_line( \@columns, \@TRIM_COLUMNS ) if ( $opt{'t'} );
-        Pipe::Text::pad_line( \@columns )               if ( $opt{'p'} );
+        url_encode_line( \@columns )        if ( $opt{'u'} );
+        translate_line( \@columns )         if ( $opt{'l'} );
+        mask_line( \@columns )              if ( $opt{'m'} );
+        sub_string_line( \@columns )        if ( $opt{'S'} );
+        normalize_line( \@columns )         if ( $opt{'n'} );
+        trim_line( \@columns )              if ( $opt{'t'} );
+        pad_line( \@columns )               if ( $opt{'p'} );
         width( \@columns, $LINE_NUMBER )    if ( $opt{'w'} );
         sum( \@columns )                    if ( $opt{'a'} );
         count( \@columns )                  if ( $opt{'c'} );
         average( \@columns )                if ( $opt{'v'} );
         do_math( \@columns )                if ( $opt{'?'} );
-        Pipe::Column::merge_line( \@columns )             if ( $opt{'O'} );
-        Pipe::Column::order_line( \@columns, \@ORDER_COLUMNS ) if ( $opt{'o'} );
+        merge_line( \@columns )             if ( $opt{'O'} );
+        order_line( \@columns )             if ( $opt{'o'} );
         add_auto_increment( \@columns )     if ( $opt{'2'} );
         histogram( \@columns )              if ( $opt{'6'} );
     }
@@ -1935,19 +3507,19 @@ sub init
     usage() if ( $opt{'x'} );
     if ( $opt{'M'} && $opt{'0'} )
     {
-        @MERGE_SRC_COLUMNS = Pipe::Column::read_requested_qualified_columns( $opt{'M'}, $merge_expression_ref );
+        @MERGE_SRC_COLUMNS = read_requested_qualified_columns( $opt{'M'}, $merge_expression_ref );
     }
     elsif ( $opt{'M'} )
     {
         printf STDERR      "*** -M is obsolete without '-0'.\nSee usage (-x) for more information.\n";
     }
-    $BUFF_SIZE         = Pipe::Column::read_whole_number( $opt{'Q'} ) if ( $opt{'Q'} );
-    $PRECISION         = Pipe::Column::read_whole_number( $opt{'y'} ) if ( $opt{'y'} );
-    $MATCH_LIMIT       = Pipe::Column::read_whole_number( $opt{'7'} ) if ( $opt{'7'} );
+    $BUFF_SIZE         = read_whole_number( $opt{'Q'} ) if ( $opt{'Q'} );
+    $PRECISION         = read_whole_number( $opt{'y'} ) if ( $opt{'y'} );
+    $MATCH_LIMIT       = read_whole_number( $opt{'7'} ) if ( $opt{'7'} );
     $DELIMITER         = $opt{'h'} if ( $opt{'h'} );
-    $JOIN_COUNT        = Pipe::Column::read_whole_number( $opt{'q'} ) if ( $opt{'q'} );
+    $JOIN_COUNT        = read_whole_number( $opt{'q'} ) if ( $opt{'q'} );
     @INCR_COLUMNS      = read_requested_columns( $opt{'1'} ) if ( $opt{'1'} );
-    @INCR3_COLUMNS     = Pipe::Column::read_requested_qualified_columns( $opt{'3'}, $increment_ref ) if ( $opt{'3'} );
+    @INCR3_COLUMNS     = read_requested_qualified_columns( $opt{'3'}, $increment_ref ) if ( $opt{'3'} );
     @DELTA4_COLUMNS    = read_requested_columns( $opt{'4'} ) if ( $opt{'4'} );
     @SUM_COLUMNS       = read_requested_columns( $opt{'a'} ) if ( $opt{'a'} );
     @COUNT_COLUMNS     = read_requested_columns( $opt{'c'} ) if ( $opt{'c'} );
@@ -1958,21 +3530,21 @@ sub init
         Pipe::IO::build_encoding_table();
         @U_ENCODE_COLUMNS = read_requested_columns( $opt{'u'}, $KEYWORD_ANY );
     }
-    @COND_CMP_COLUMNS  = Pipe::Column::read_requested_qualified_columns( $opt{'C'}, $cond_cmp_ref, $KEYWORD_ANY, $KEYWORD_NUM_COLS )    if ( $opt{'C'} );
-    @MATH_COLUMNS      = Pipe::Column::read_requested_qualified_columns( $opt{'?'}, $math_ref )        if ( $opt{'?'} );
-    @CASE_COLUMNS      = Pipe::Column::read_requested_qualified_columns( $opt{'e'}, $case_ref, $KEYWORD_ANY )        if ( $opt{'e'} );
-    @REPLACE_COLUMNS   = Pipe::Column::read_requested_qualified_columns( $opt{'E'}, $replace_ref )     if ( $opt{'E'} );
-    @NOT_MATCH_COLUMNS = Pipe::Column::read_requested_qualified_columns( $opt{'G'}, $not_match_ref, $KEYWORD_ANY )   if ( $opt{'G'} );
-    @MATCH_COLUMNS     = Pipe::Column::read_requested_qualified_columns( $opt{'g'}, $match_ref, $KEYWORD_ANY )       if ( $opt{'g'} );
-    @MATCH_START_COLS  = Pipe::Column::read_requested_qualified_columns( $opt{'X'}, $match_start_ref, $KEYWORD_ANY ) if ( $opt{'X'} );
-    @MATCH_Y_COLUMNS   = Pipe::Column::read_requested_qualified_columns( $opt{'Y'}, $match_y_ref, $KEYWORD_ANY )     if ( $opt{'Y'} );
-    @SCRIPT_COLUMNS    = Pipe::Column::read_requested_qualified_columns( $opt{'k'}, $script_ref )      if ( $opt{'k'} );
-    @MASK_COLUMNS      = Pipe::Column::read_requested_qualified_columns( $opt{'m'}, $mask_ref, $KEYWORD_ANY  )        if ( $opt{'m'} );
-    @SUBS_COLUMNS      = Pipe::Column::read_requested_qualified_columns( $opt{'S'}, $subs_ref )        if ( $opt{'S'} );
-    @TRANSLATE_COLUMNS = Pipe::Column::read_requested_qualified_columns( $opt{'l'}, $trans_ref, $KEYWORD_ANY )       if ( $opt{'l'} );
-    @PAD_COLUMNS       = Pipe::Column::read_requested_qualified_columns( $opt{'p'}, $pad_ref )         if ( $opt{'p'} );
-    @FLIP_COLUMNS      = Pipe::Column::read_requested_qualified_columns( $opt{'f'}, $flip_ref )        if ( $opt{'f'} );
-    @FORMAT_COLUMNS    = Pipe::Column::read_requested_qualified_columns( $opt{'F'}, $format_ref )      if ( $opt{'F'} );
+    @COND_CMP_COLUMNS  = read_requested_qualified_columns( $opt{'C'}, $cond_cmp_ref, $KEYWORD_ANY, $KEYWORD_NUM_COLS )    if ( $opt{'C'} );
+    @MATH_COLUMNS      = read_requested_qualified_columns( $opt{'?'}, $math_ref )        if ( $opt{'?'} );
+    @CASE_COLUMNS      = read_requested_qualified_columns( $opt{'e'}, $case_ref, $KEYWORD_ANY )        if ( $opt{'e'} );
+    @REPLACE_COLUMNS   = read_requested_qualified_columns( $opt{'E'}, $replace_ref )     if ( $opt{'E'} );
+    @NOT_MATCH_COLUMNS = read_requested_qualified_columns( $opt{'G'}, $not_match_ref, $KEYWORD_ANY )   if ( $opt{'G'} );
+    @MATCH_COLUMNS     = read_requested_qualified_columns( $opt{'g'}, $match_ref, $KEYWORD_ANY )       if ( $opt{'g'} );
+    @MATCH_START_COLS  = read_requested_qualified_columns( $opt{'X'}, $match_start_ref, $KEYWORD_ANY ) if ( $opt{'X'} );
+    @MATCH_Y_COLUMNS   = read_requested_qualified_columns( $opt{'Y'}, $match_y_ref, $KEYWORD_ANY )     if ( $opt{'Y'} );
+    @SCRIPT_COLUMNS    = read_requested_qualified_columns( $opt{'k'}, $script_ref )      if ( $opt{'k'} );
+    @MASK_COLUMNS      = read_requested_qualified_columns( $opt{'m'}, $mask_ref, $KEYWORD_ANY  )        if ( $opt{'m'} );
+    @SUBS_COLUMNS      = read_requested_qualified_columns( $opt{'S'}, $subs_ref )        if ( $opt{'S'} );
+    @TRANSLATE_COLUMNS = read_requested_qualified_columns( $opt{'l'}, $trans_ref, $KEYWORD_ANY )       if ( $opt{'l'} );
+    @PAD_COLUMNS       = read_requested_qualified_columns( $opt{'p'}, $pad_ref )         if ( $opt{'p'} );
+    @FLIP_COLUMNS      = read_requested_qualified_columns( $opt{'f'}, $flip_ref )        if ( $opt{'f'} );
+    @FORMAT_COLUMNS    = read_requested_qualified_columns( $opt{'F'}, $format_ref )      if ( $opt{'F'} );
     @COMPARE_COLUMNS   = read_requested_columns( $opt{'b'} )                             if ( $opt{'b'} );
     @NO_COMPARE_COLUMNS= read_requested_columns( $opt{'B'} )                             if ( $opt{'B'} );
     @NORMAL_COLUMNS    = read_requested_columns( $opt{'n'}, $KEYWORD_ANY )               if ( $opt{'n'} );
@@ -1984,7 +3556,7 @@ sub init
         ($AUTO_INCR_COLUMN, $AUTO_INCR_SEED, $AUTO_INCR_RESET) = parse_single_column_single_argument( $opt{'2'} );
         $AUTO_INCR_ORIG_VALUE = $AUTO_INCR_SEED;
     }
-    @HISTOGRAM_COLUMN  = Pipe::Column::read_requested_qualified_columns( $opt{'6'}, $hist_ref )        if ( $opt{'6'} );
+    @HISTOGRAM_COLUMN  = read_requested_qualified_columns( $opt{'6'}, $hist_ref )        if ( $opt{'6'} );
     if ( $opt{'v'} )
     {
         @AVG_COLUMNS   = read_requested_columns( $opt{'v'} ) if ( $opt{'v'} );
@@ -2106,7 +3678,7 @@ sub push_merge_ref_columns( $$$ )
     $key_col = sprintf( "%d", $key_col );
     my $key = @{$line}[ $key_col ];
     $key = uc $key if ( $opt{'I'} ); # Compare key in upper case if '-I'.
-    $key = Pipe::Text::normalize( $key ) if ( $opt{'N'} );
+    $key = normalize( $key ) if ( $opt{'N'} );
     # Return is the key is blank, like if the index is out of range, or the files have different delimiters.
     return if ( ! defined $key );
     my @string_values = ();
@@ -2267,7 +3839,7 @@ while (<$ifh>)
 close $ifh;
 push @ALL_LINES, @LINE_BUFF;
 # Print out all results now we have fully read the entire input file and processed it.
-finalize_full_read_functions() if ( $READ_FULL );
+Pipe::IO::finalize_full_read_functions() if ( $READ_FULL );
 $LINE_NUMBER = 0;
 while ( @ALL_LINES )
 {

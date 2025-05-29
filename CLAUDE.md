@@ -30,6 +30,7 @@ pipe/
 - Tasks are managed as .md files in the `tasks/` directory.
 - As tasks are completed, update the relevant document to note the task status (complete, in progress, etc).
 - Note any issues or blockers in the task document.
+- Update the next-tasks.md file to reflect the current status of the tasks. This is important for when context gets cleared to instruct Claude and LLMs to continue working on the tasks.
 
 ### Version Control
 
