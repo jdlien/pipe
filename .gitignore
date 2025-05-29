@@ -19,3 +19,10 @@ data/
 *~
 *.swp
 *.swo
+
+cover_db/
+
+# Carton/cpanm dependencies
+local/
+cpanfile.snapshot
+.carton/
