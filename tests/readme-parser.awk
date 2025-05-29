@@ -114,7 +114,7 @@ BEGIN {
     backTicksImportant = 1;
     outputFileType = output;
     if ($2 ~ /Ignore/) {
-        specialInstruction
+        specialInstruction = 1;
         if ($2 ~ /last newline/) {
             # Add special instruction to trim off last newline in heredoc.
             specialInstruction = IGNORE_LAST_NL;

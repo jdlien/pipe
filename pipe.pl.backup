@@ -36,20 +36,12 @@ use warnings;
 use vars qw/ %opt /;
 use Getopt::Std;
 use utf8;
-use lib 'lib';
-use lib './lib';
-use lib '../lib';
-use Pipe::Core qw(trim get_number_format);
-use Pipe::Context;
-use Pipe::IO qw(:output :processing :encoding);
 
 binmode STDOUT;
 binmode STDERR;
 binmode STDIN;
 
 ### Globals
-# Context object will be initialized after option processing
-my $ctx;
 my $VERSION           = qq{2.03.02};
 my $FALSE             = 1;
 my $TRUE              = 0;
@@ -760,15 +752,46 @@ sub normalize( $ )
 }
 
 # Trim function to remove white space from the start and end of the string.
-# This function is now imported from Pipe::Core
-# (Original implementation moved to lib/Pipe/Core.pm)
+# param:  string to trim.
+# param:  Trims the string to argument number of characters (optional).
+#         This operation is performed after any white space has been trimmed.
+# return: string without leading or trailing spaces.
+sub trim
+{
+    my $string = shift;
+    my $chop_count = 0;
+    $chop_count = shift if ( @_ );
+    $string =~ s/^\s+//;
+    $string =~ s/\s+$//;
+    $string = substr( $string, 0, $chop_count ) if ( $chop_count );
+    return $string;
+}
 
 # Prints the contents of the argument hash reference.
 # param:  title of output.
 # param:  hash reference of data.
 # param:  List of columns requested by user.
 # return: <none>
-# print_summary function is now imported from Pipe::IO
+sub print_summary( $$$ )
+{
+    my $title    = shift;
+    my $hash_ref = shift;
+    my $columns  = shift;
+    printf STDERR "== %9s\n", $title if ( $title and ! $opt{'N'} );
+    foreach my $column ( sort @{$columns} )
+    {
+        my $value = 0;
+        $value = $hash_ref->{ 'c'.$column } if ( defined $hash_ref->{ 'c'.$column } );
+        if ( $opt{'N'} )
+        {
+            printf STDERR "%s%s%s\n", 'c'.$column, $DELIMITER, get_number_format( $value, 0, $PRECISION );
+        }
+        else
+        {
+            printf STDERR " %2s: %7s\n", 'c'.$column, get_number_format( $value, 0, $PRECISION );
+        }
+    }
+}
 
 # Counts the non-empty values of specified columns.
 # param:  line to pull out columns from.
@@ -1140,6 +1163,131 @@ sub sort_list( $ )
 # Outputs data from argument line as a table of one type or another.
 # param:  String of line data - pipe-delimited.
 # return: <none>.
+sub prepare_table_data( $ )
+{
+    my $line = shift;
+    my @newLine = ();
+    if ( $TABLE_OUTPUT =~ m/HTML/i )
+    {
+        push @newLine, "  <tr><td>";
+        foreach my $value ( @{ $line } )
+        {
+            push @newLine, $value;
+            push @newLine, '</td><td>';
+        }
+        # remove the last '</td><td>'.
+        pop @newLine;
+        push @newLine, "</td></tr>";
+    }
+    elsif ( $TABLE_OUTPUT =~ m/MEDIA_WIKI/i )
+    {
+        push @newLine, "|-\n";
+        foreach my $value ( @{ $line } )
+        {
+            push @newLine, "| ";
+            push @newLine, $value;
+            push @newLine, "\n";
+        }
+    }
+    elsif ( $TABLE_OUTPUT =~ m/WIKI/i )
+    {
+        push @newLine, "\n|-\n| ";
+        foreach my $value ( @{ $line } )
+        {
+            push @newLine, $value;
+            push @newLine, ' || ';
+        }
+        # remove the last ' || '.
+        pop @newLine;
+        # push @newLine, "\n|-";
+    }
+    elsif ( $TABLE_OUTPUT =~ m/MD/i )
+    {
+        # Markdown tables start with a '|'
+        push @newLine, '| ';
+        foreach my $value ( @{ $line } )
+        {
+            push @newLine, $value;
+            push @newLine, ' | ';
+        }
+        push @newLine, "\n";
+    }
+    elsif ( $TABLE_OUTPUT =~ m/CSV/i )
+    {
+        foreach my $value ( @{ $line } )
+        {
+            if ( $TABLE_OUTPUT =~ m/UTF-8/ )
+            {
+                # remove repeated white space
+                $value =~ s/\s+/ /g;
+                # Only quote values that contain ','
+                if ( $value =~ m/,/ || $value =~ m/[\"|\']/ )
+                {
+                    $value =~ s/\"/\"\"/g;
+                    push @newLine, "\"".$value."\"";
+                }
+                else
+                {
+                    push @newLine, $value;
+                }
+            }
+            else
+            {
+                if ( $value =~ m/^[-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)?$/ )
+                {
+                    push @newLine, $value;
+                }
+                else
+                {
+                    push @newLine, "\"".$value."\"";
+                }
+            }
+            push @newLine, ',';
+        }
+        # The number of titles indicate the expected width of each row.
+        if ( $TOTAL_CSV_COLS )
+        {
+            # Add trailing delimiters to match expected columns if the row is ragged and short.
+            for ( my $i = scalar(@{ $line }); $i < $TOTAL_CSV_COLS; $i++ )
+            {
+                push @newLine, ',';
+            }
+        }
+        # remove the last ','.
+        pop @newLine;
+        push @newLine, "\n";
+    }
+    elsif ( $TABLE_OUTPUT =~ m/CHUNKED/i )
+    {
+        foreach my $value ( @{ $line } )
+        {
+            push @newLine, $value;
+            push @newLine, $DELIMITER;
+        }
+        # remove the last delimiter.
+        pop @newLine;
+        push @newLine, "\n";
+        # Place the requested literal AFTER the requisite number of skip rows are output.
+        if ( defined $SKIP_LINE_TABLE && $SKIP_LINE_TABLE > 0 )
+        {
+            if ( $LINE_NUMBER % $SKIP_LINE_TABLE == 0 )
+            {
+                  push @newLine, $SKIP_VALUE;
+                  push @newLine, "\n";
+            }
+        }
+    }
+    else # Huh, unknown table type.
+    {
+        printf STDERR "** error, unsupported table type '%s'\n", $TABLE_OUTPUT;
+        exit( 1 );
+    }
+    @{ $line } = ();
+    foreach my $v ( @newLine )
+    {
+        push @{ $line }, $v;
+    }
+}
 
 # Applies the mask specified in argument 2 to string in argument 1.
 # param:  String - target of masking operation, the string data from this column.
@@ -2800,8 +2948,23 @@ sub get_column_value( $$ )
 # param:  Expected values 0=any, 1=whole number (optional).
 # param:  Precision of decimal places in floating values (optional).
 # return: Formatted string value of the argument.
-# get_number_format function is now imported from Pipe::Core
-# (Original implementation moved to lib/Pipe/Core.pm)
+sub get_number_format
+{
+    my $input       = shift @_;
+    my $number_type = shift @_ if ( @_ );
+    my $precision   = shift @_ if ( @_ );
+    my $summary     = '';
+    if ( $number_type )
+    {
+        if ( $input && $input =~ /^[+]?\d+\z/ ){ $summary = sprintf "%d", $input; }
+    }
+    elsif ( $input =~ /^[+-]?\d+\z/ )   { $summary = sprintf "%d", $input; }
+    elsif ( defined $precision && $input =~ /^-?\d+\.?\d*\z/ || $input =~ /^-?(?:\d+(?:\.\d*)?&\.\d+)\z/ )
+    { $summary = eval("sprintf \"%.".$precision."f\", $input"); }
+    elsif ( $input =~ /^([+-]?)(?=\d&\.\d)\d*(\.\d*)?([Ee]([+-]?\d+))?\z/ ){ $summary = $input; }
+    else { $summary = "NaN"; }
+    return $summary;
+}
 
 # Does an extended math operation on a group.
 # param: The operation string (min,max,avg,sum).
@@ -3013,6 +3176,35 @@ sub randomize_list()
 # this function will manage the output.
 # param:  <none>
 # return: <none>
+sub finalize_full_read_functions()
+{
+    if ( $opt{'d'} )
+    {
+        dedup_list( \@DDUP_COLUMNS );
+    }
+    if ( $opt{'r'} ) # select 'n'% of file at random for output.
+    {
+        randomize_list();
+    }
+    if ( $opt{'s'} )# Sort the items from STDIN.
+    {
+        # We have a list of lines. We will split them creating a key that we append to the start with a delimiter of ''
+        # When it comes time to sort use the default sort in perl and then remove the prefix.
+        sort_list( \@SORT_COLUMNS );
+    }
+    if ( $opt{'v'} ) # Compute averages now we have read the entire input.
+    {
+        foreach my $column ( keys %{$avg_ref} )
+        {
+            if ( exists $avg_count->{ $column } and $avg_count->{ $column } != 0 )
+            {
+                my $result = sprintf "%.3f", ( $avg_ref->{ $column } / $avg_count->{ $column } );
+                # replace the previous column sum with the average.
+                $avg_ref->{ $column } = $result;
+            }
+        }
+    }
+}
 
 # Tests if this is a line that the user requested to be output.
 # param:  integer line number.
@@ -3047,7 +3239,23 @@ sub is_printable_range( $$ )
 # Takes a string and encodes it with URL-safe characters.
 # param:  string.
 # return: encoded string.
-# map_url_characters function is now imported from Pipe::IO
+sub map_url_characters( $ )
+{
+    my @characters = split '', shift;
+    my @newString  = ();
+    while ( @characters )
+    {
+        my $c = shift @characters;
+        next if ( ! defined $c );
+        if ( exists $url_characters->{ ord $c } )
+        {
+            push @newString, $url_characters->{ ord $c };
+            next;
+        }
+        push @newString, $c;
+    }
+    return join '', @newString;
+}
 
 # Performs URL encoding of given columns.
 # param:  line from input.
@@ -3059,7 +3267,7 @@ sub url_encode_line( $ )
     {
         foreach my $colIndex ( 0 .. scalar( @{ $line } ) -1 )
         {
-            @{ $line }[ $colIndex ] = Pipe::IO::map_url_characters( @{ $line }[ $colIndex ] ) if ( @{ $line }[ $colIndex ] );
+            @{ $line }[ $colIndex ] = map_url_characters( @{ $line }[ $colIndex ] ) if ( @{ $line }[ $colIndex ] );
         }
         return;
     }
@@ -3067,7 +3275,7 @@ sub url_encode_line( $ )
     {
         if ( defined @{ $line }[ $colIndex ] )
         {
-            @{ $line }[ $colIndex ] = Pipe::IO::map_url_characters( @{ $line }[ $colIndex ] );
+            @{ $line }[ $colIndex ] = map_url_characters( @{ $line }[ $colIndex ] );
         }
     }
 }
@@ -3075,11 +3283,184 @@ sub url_encode_line( $ )
 # Builds a map of URL characters to URL encoded values.
 # param:  <none>
 # return: <none>
-# build_encoding_table function is now imported from Pipe::IO
+sub build_encoding_table()
+{
+    $url_characters->{ord ' '} = '%20'; $url_characters->{ord '!'} = '%21';  $url_characters->{ord '"'} = '%22';
+    $url_characters->{ord '#'} = '%23'; $url_characters->{ord '$'} = '%24';  $url_characters->{ord '%'} = '%25';
+    $url_characters->{ord '&'} = '%26'; $url_characters->{ord '\''} = '%27'; $url_characters->{ord '('} = '%28';
+    $url_characters->{ord ')'} = '%29'; $url_characters->{ord '*'} = '%2A';  $url_characters->{ord '+'} = '%2B';
+    $url_characters->{ord ','} = '%2C'; $url_characters->{ord '-'} = '%2D';  $url_characters->{ord '.'} = '%2E';
+    $url_characters->{ord '/'} = '%2F'; $url_characters->{ord ':'} = '%3A';  $url_characters->{ord ';'} = '%3B';
+    $url_characters->{ord '<'} = '%3C'; $url_characters->{ord '='} = '%3D';  $url_characters->{ord '>'} = '%3E';
+    $url_characters->{ord '?'} = '%3F'; $url_characters->{ord '@'} = '%40';  $url_characters->{ord '{'} = '%7B';
+    $url_characters->{ord '|'} = '%7C'; $url_characters->{ord '}'} = '%7D';  $url_characters->{ord '~'} = '%7E';
+    $url_characters->{ord '['} = '%5B'; $url_characters->{ord '\\'} = '%5C'; $url_characters->{ord ']'} = '%5D';
+    $url_characters->{ord '^'} = '%5E'; $url_characters->{ord '_'} = '%5F';  $url_characters->{ord '`'} = '%60';
+}
 
 # Outputs table header or footer, depending on argument string.
 # param:  String of either 'HEAD' or 'FOOT'.
 # return: <none>
+sub table_output( $ )
+{
+    my $placement = shift;
+    if ( $TABLE_OUTPUT =~ m/HTML/i )
+    {
+        if ( $placement =~ m/HEAD/ )
+        {
+            printf "<table%s>\n  <tbody>\n", $TABLE_ATTR;
+        }
+        else
+        {
+            printf "  </tbody>\n</table>\n";
+        }
+    }
+    elsif ( $TABLE_OUTPUT =~ m/MEDIA_WIKI/i )
+    {
+        if ( $placement =~ m/HEAD/ )
+        {
+            # {| class="wikitable" 
+            # |- style="font-weight:bold;"
+            # ! A
+            # ! B
+            # |-
+            # printf "{| class='wikitable'%s", $TABLE_ATTR;
+            my @headers = split(/,/, $TABLE_ATTR);
+            printf "{| class=\"wikitable\"\n";
+            if ( scalar( @headers ) > 0)
+            {
+                printf "|- style=\"font-weight:bold;\"\n";
+                foreach my $my_header ( @headers )
+                {
+                    printf "! %s\n", trim($my_header);
+                }
+            }
+            # printf "|-";
+        }
+        else 
+        {
+            printf "|}\n";
+        }
+    }
+    elsif ( $TABLE_OUTPUT =~ m/WIKI/i )
+    {
+        if ( $placement =~ m/HEAD/ )
+        {
+            # printf "{| class='wikitable'%s", $TABLE_ATTR;
+            # {| class="wikitable" 
+            # |- style="font-weight:bold;"
+            # ! A
+            # ! B
+            # |-
+            my @headers = split(/,/, $TABLE_ATTR);
+            printf "{| class=\"wikitable\"";
+            if ( scalar( @headers ) > 0)
+            {
+                printf "\n|- style=\"font-weight:bold;\"";
+                foreach my $my_header ( @headers )
+                {
+                    printf "\n! %s", trim($my_header);
+                }
+            }
+        }
+        else
+        {
+            printf "\n|}\n";
+        }
+    }
+    elsif ( $TABLE_OUTPUT =~ m/MD/i )
+    {
+        if ( $placement =~ m/HEAD/ )
+        {
+            # | **A** | **B** |
+            # |---|---|
+            my @headers = split(/,/, $TABLE_ATTR);
+            if ( scalar( @headers ) > 0)
+            {
+                printf "|";
+                foreach my $my_header ( @headers )
+                {
+                    printf " **%s** |", trim($my_header);
+                }
+                printf "\n";
+                # Print the header separation bar
+                printf "|:";
+                foreach my $my_header ( @headers )
+                {
+                    printf "---:|";
+                }
+                printf "\n";
+            }
+        }
+        # No footer for MarkDown.
+    }
+    elsif ( $TABLE_OUTPUT =~ m/^CSV/i )
+    {
+        if ( $placement =~ m/HEAD/ )
+        {
+            my @titles = split ',', $TABLE_ATTR;
+            my $out_string = "";
+            # The number of titles dictates the number of columns which we try to ensure.
+            $TOTAL_CSV_COLS = scalar( @titles );
+            for my $title ( @titles )
+            {
+                if ( $TABLE_OUTPUT =~ m/UTF-8/ )
+                {
+                    $out_string .= sprintf "%s,", trim( $title );
+                }
+                else
+                {
+                    $out_string .= sprintf "\"%s\",", trim( $title );
+                }
+            }
+            chop( $out_string ); # Take the last ',' off the end of the string.
+            printf "%s\n", $out_string if ( $out_string );
+        }
+        # No footer for CSV.
+    }
+    elsif ( $TABLE_OUTPUT =~ m/CHUNKED/i )
+    {
+        if ( $placement =~ m/HEAD/ )
+        {
+            # [BEGIN={literal}][,SKIP={integer}.{literal}][,END={literal}
+            my @keywords = split ',', $TABLE_ATTR;
+            foreach my $keyword_assignment ( @keywords )
+            {
+                my ( $keyword, @params ) = split /=/, $keyword_assignment;
+                my $param = join '=', @params;
+                if ( defined $keyword )
+                {
+                    if ( $keyword =~ m/BEGIN/ )
+                    {
+                        $BEGIN_VALUE = $param;
+                    }
+                    elsif ( $keyword =~ m/END/ )
+                    {
+                        $END_VALUE = $param;
+                    }
+                    elsif ( $keyword =~ m/SKIP/ )
+                    {
+                        # parse out the number of lines to skip and the literal.
+                        ( $SKIP_LINE_TABLE, my @skip_values ) = split '\.', $param;
+                        if ( $SKIP_LINE_TABLE !~ m/^\d+$/ || ( $SKIP_LINE_TABLE + 0 ) < 1 )
+                        {
+                            printf STDERR "**error: invalid skip value requested in chunked table output.\n", $SKIP_LINE_TABLE;
+                            exit 0;
+                        }
+                        # Preserver literals that contain '.'
+                        $SKIP_VALUE = join '.', @skip_values;
+                    }
+                }
+            }
+            printf STDERR "BEGIN='%s' SKIP='%s'.'%s', END='%s'\n", $BEGIN_VALUE, $SKIP_LINE_TABLE, $SKIP_VALUE, $END_VALUE if ( $opt{'D'} );
+            printf "%s\n", $BEGIN_VALUE if ( defined $BEGIN_VALUE && $BEGIN_VALUE !~ m/^$/ );
+        }
+        else # Footer for chunked table types.
+        {
+            printf "%s\n", $END_VALUE if ( defined $END_VALUE && $END_VALUE !~ m/^$/ );
+        }
+    }
+}
 
 # Merges other columns' data into a specific column.
 # param:  Original line input.
@@ -3441,7 +3822,7 @@ sub process_line( $ )
     my $modified_line = '';
     if ( $TABLE_OUTPUT )
     {
-        Pipe::IO::prepare_table_data( \@columns );
+        prepare_table_data( \@columns );
         $modified_line = join '', @columns;
         return $modified_line; # The rest of the computation is not relavent to tables.
     }
@@ -3526,7 +3907,7 @@ sub init
     @SHOW_EMPTY_COLUMNS= read_requested_columns( $opt{'Z'} ) if ( $opt{'Z'} );
     if ( $opt{'u'} )
     {
-        Pipe::IO::build_encoding_table();
+        build_encoding_table();
         @U_ENCODE_COLUMNS = read_requested_columns( $opt{'u'}, $KEYWORD_ANY );
     }
     @COND_CMP_COLUMNS  = read_requested_qualified_columns( $opt{'C'}, $cond_cmp_ref, $KEYWORD_ANY, $KEYWORD_NUM_COLS )    if ( $opt{'C'} );
@@ -3701,12 +4082,7 @@ sub push_merge_ref_columns( $$$ )
 }
 
 init();
-
-# Initialize context object after options are processed
-$ctx = Pipe::Context->new();
-$ctx->set_options(\%opt);
-
-Pipe::IO::table_output("HEAD") if ( $TABLE_OUTPUT );
+table_output("HEAD") if ( $TABLE_OUTPUT );
 my $ifh;
 my $is_stdin = 0;
 # If both switches are used together we expect input on STDIN and with '-0'.
@@ -3838,7 +4214,7 @@ while (<$ifh>)
 close $ifh;
 push @ALL_LINES, @LINE_BUFF;
 # Print out all results now we have fully read the entire input file and processed it.
-Pipe::IO::finalize_full_read_functions() if ( $READ_FULL );
+finalize_full_read_functions() if ( $READ_FULL );
 $LINE_NUMBER = 0;
 while ( @ALL_LINES )
 {
@@ -3853,10 +4229,10 @@ if ( $opt{'Q'} and $IS_A_POST_MATCH ) # There was a match so dump the buffer, bu
     printf STDERR "=>EOF\n";
     $IS_A_POST_MATCH = 0;
 }
-Pipe::IO::table_output("FOOT") if ( $TABLE_OUTPUT );
+table_output("FOOT") if ( $TABLE_OUTPUT );
 # Summary section.
-Pipe::IO::print_summary( "count", $count_ref, \@COUNT_COLUMNS, $ctx ) if ( $opt{'c'} );
-Pipe::IO::print_summary( "sum", $sum_ref, \@SUM_COLUMNS, $ctx )        if ( $opt{'a'} );
+print_summary( "count", $count_ref, \@COUNT_COLUMNS ) if ( $opt{'c'} );
+print_summary( "sum", $sum_ref, \@SUM_COLUMNS)        if ( $opt{'a'} );
 if ( $opt{'v'} )
 {
     # compute average for each column.
@@ -3871,7 +4247,7 @@ if ( $opt{'v'} )
             $avg_ref->{ $key } = 0.0;
         }
     }
-    Pipe::IO::print_summary( "average", $avg_ref, \@AVG_COLUMNS, $ctx );
+    print_summary( "average", $avg_ref, \@AVG_COLUMNS );
 }
 if ( $opt{'w'} )
 {
