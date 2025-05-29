@@ -13,6 +13,7 @@ use Pipe::Math qw(do_op);
 use Exporter 'import';
 our @EXPORT_OK = qw(
     sort_list dedup_list randomize_list push_merge_ref_columns
+    finalize_full_read_functions
 );
 
 our %EXPORT_TAGS = (
@@ -20,6 +21,7 @@ our %EXPORT_TAGS = (
     'dedup'     => [qw(dedup_list)],
     'random'    => [qw(randomize_list)],
     'merge'     => [qw(push_merge_ref_columns)],
+    'finalize'  => [qw(finalize_full_read_functions)],
     'all'       => \@EXPORT_OK,
 );
 
@@ -279,6 +281,39 @@ sub push_merge_ref_columns( $$$ )
     my $values = join $main::DELIMITER, @string_values;
     $main::REF_FILE_DATA_HREF->{ $key } = $values;
     print STDERR "$key => $values\n" if ( $main::opt{'D'} );
+}
+
+# Finalize operations that require the entire file to have been read
+# param:  none
+# return: None
+sub finalize_full_read_functions()
+{
+    if ( $main::opt{'d'} )
+    {
+        dedup_list( \@main::DDUP_COLUMNS );
+    }
+    if ( $main::opt{'r'} ) # select 'n'% of file at random for output.
+    {
+        randomize_list();
+    }
+    if ( $main::opt{'s'} )# Sort the items from STDIN.
+    {
+        # We have a list of lines. We will split them creating a key that we append to the start with a delimiter of ''
+        # When it comes time to sort use the default sort in perl and then remove the prefix.
+        sort_list( \@main::SORT_COLUMNS );
+    }
+    if ( $main::opt{'v'} ) # Compute averages now we have read the entire input.
+    {
+        foreach my $column ( keys %{$main::avg_ref} )
+        {
+            if ( exists $main::avg_count->{ $column } and $main::avg_count->{ $column } != 0 )
+            {
+                my $result = sprintf "%.3f", ( $main::avg_ref->{ $column } / $main::avg_count->{ $column } );
+                # replace the previous column sum with the average.
+                $main::avg_ref->{ $column } = $result;
+            }
+        }
+    }
 }
 
 1;

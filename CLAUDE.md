@@ -35,7 +35,7 @@ pipe/
 ### Version Control
 
 - Before making significant changes, make atomic commits explaining what has changed.
-- After making significant changes, make commits with thorough descriptions of the changes.
+- After making significant changes, make commits with descriptions of the changes.
 
 ### Important Considerations
 
@@ -73,6 +73,18 @@ pipe/
 
 - `run-tests.pl` - Runs both Perl and shell tests
 - Provides unified test results
+- **AI-friendly mode**: Use `./run-tests.pl -a` for single-process execution (no subprocess permission prompts)
+- **Quiet mode**: Use `./run-tests.pl -aq` for minimal output suitable for AI tools
+- **Integration only**: Use `./run-tests.pl -i` to skip Perl unit tests
+
+#### AI Tool Integration
+
+For seamless integration with AI development tools like Claude Code:
+
+- Always use `./run-tests.pl -a` (AI-friendly mode)
+- This runs all tests in a single process without spawning subprocesses
+- Eliminates repeated permission prompts that AI tools encounter
+- Add `-q` for quiet output: `./run-tests.pl -aq`
 
 ### Perl Conventions
 

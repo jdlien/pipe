@@ -206,7 +206,8 @@ Applies masking to specified columns in a line.
 =cut
 
 sub mask_line {
-    my @in_line = @_;
+    my $line_ref = shift;
+    my @in_line = @$line_ref;
     my @out_line = ();
     
     foreach my $column_index (0..$#in_line) {
@@ -223,7 +224,8 @@ sub mask_line {
         push @out_line, $value;
     }
     
-    return @out_line;
+    # Modify the original array in place
+    @$line_ref = @out_line;
 }
 
 # ===================================================
@@ -237,21 +239,36 @@ Extracts substrings from specified columns in a line.
 =cut
 
 sub sub_string_line {
-    my @in_line = @_;
+    my $line_ref = shift;
+    my @in_line = @$line_ref;
     my @out_line = ();
+    
+    if ($main::opt{'D'}) {
+        print STDERR "sub_string_line(): Processing " . scalar(@in_line) . " columns\n";
+        if (defined $main::subs_ref) {
+            print STDERR "sub_string_line(): subs_ref contents:\n";
+            foreach my $k (keys %$main::subs_ref) {
+                print STDERR "  Column $k => '$main::subs_ref->{$k}'\n";
+            }
+        }
+    }
     
     foreach my $column_index (0..$#in_line) {
         my $value = $in_line[$column_index];
         
         if (defined $main::subs_ref && exists $main::subs_ref->{$column_index}) {
             my $range = $main::subs_ref->{$column_index};
+            if ($main::opt{'D'}) {
+                print STDERR "sub_string_line(): Applying substring to column $column_index: '$value' with range '$range'\n";
+            }
             $value = sub_string($value, $range);
         }
         
         push @out_line, $value;
     }
     
-    return @out_line;
+    # Modify the original array in place
+    @$line_ref = @out_line;
 }
 
 =head2 sub_string
@@ -373,7 +390,8 @@ Applies padding to specified columns in a line.
 =cut
 
 sub pad_line {
-    my @in_line = @_;
+    my $line_ref = shift;
+    my @in_line = @$line_ref;
     my @out_line = ();
     
     foreach my $column_index (0..$#in_line) {
@@ -387,7 +405,8 @@ sub pad_line {
         push @out_line, $value;
     }
     
-    return @out_line;
+    # Modify the original array in place
+    @$line_ref = @out_line;
 }
 
 # ===================================================
@@ -599,7 +618,8 @@ Applies conditional string replacement to columns.
 =cut
 
 sub replace_line {
-    my @in_line = @_;
+    my $line_ref = shift;
+    my @in_line = @$line_ref;
     my @out_line = ();
     
     foreach my $column_index (0..$#in_line) {
@@ -617,7 +637,8 @@ sub replace_line {
         print STDERR "replace_line(): result=(" . join(",", @out_line) . ")\n";
     }
     
-    return @out_line;
+    # Modify the original array in place
+    @$line_ref = @out_line;
 }
 
 =head2 replace
@@ -662,7 +683,8 @@ Performs regex-based search and replace on columns.
 =cut
 
 sub translate_line {
-    my @in_line = @_;
+    my $line_ref = shift;
+    my @in_line = @$line_ref;
     my @out_line = ();
     
     foreach my $column_index (0..$#in_line) {
@@ -687,7 +709,8 @@ sub translate_line {
         print STDERR "translate_line(): result=(" . join(",", @out_line) . ")\n";
     }
     
-    return @out_line;
+    # Modify the original array in place
+    @$line_ref = @out_line;
 }
 
 sub apply_translation {
@@ -746,7 +769,8 @@ URL encodes specified columns.
 =cut
 
 sub url_encode_line {
-    my @in_line = @_;
+    my $line_ref = shift;
+    my @in_line = @$line_ref;
     my @out_line = ();
     
     foreach my $column_index (0..$#in_line) {
@@ -762,7 +786,8 @@ sub url_encode_line {
         push @out_line, $value;
     }
     
-    return @out_line;
+    # Modify the original array in place
+    @$line_ref = @out_line;
 }
 
 1;

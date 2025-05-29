@@ -105,18 +105,18 @@ our @SUM_COLUMNS       = (); our $sum_ref       = {};
 our @WIDTH_COLUMNS     = (); our $width_min_ref = {}; our $width_max_ref = {}; our $width_line_min_ref = {}; our $width_line_max_ref = {};
 our @AVG_COLUMNS       = (); our $avg_ref       = {}; our $avg_count = {};
 our @DDUP_COLUMNS      = (); our $ddup_ref      = {};
-my @CASE_COLUMNS      = (); my $case_ref      = {};
-my @REPLACE_COLUMNS   = (); my $replace_ref   = {}; # Replacement columns and content. Handled like -f.
+my @CASE_COLUMNS      = (); our $case_ref      = {};
+my @REPLACE_COLUMNS   = (); our $replace_ref   = {}; # Replacement columns and content. Handled like -f.
 our @COND_CMP_COLUMNS  = (); our $cond_cmp_ref  = {}; # case switching expressions like uc,lc,mc.
 my @TRIM_COLUMNS      = ();
 my @ORDER_COLUMNS     = ();
 my @NORMAL_COLUMNS    = ();
 our @SORT_COLUMNS      = ();
-my @TRANSLATE_COLUMNS = (); my $trans_ref     = {}; # Translation values.
-my @MASK_COLUMNS      = (); my $mask_ref      = {}; # Stores the masks by column number.
-my @SUBS_COLUMNS      = (); my $subs_ref      = {}; # Stores the sub string indexes by column number.
-my @PAD_COLUMNS       = (); my $pad_ref       = {}; # Stores the pad instructions by column number.
-my @FLIP_COLUMNS      = (); my $flip_ref      = {}; # Stores the flip instructions by column number.
+my @TRANSLATE_COLUMNS = (); our $trans_ref     = {}; # Translation values.
+my @MASK_COLUMNS      = (); our $mask_ref      = {}; # Stores the masks by column number.
+my @SUBS_COLUMNS      = (); our $subs_ref      = {}; # Stores the sub string indexes by column number.
+my @PAD_COLUMNS       = (); our $pad_ref       = {}; # Stores the pad instructions by column number.
+my @FLIP_COLUMNS      = (); our $flip_ref      = {}; # Stores the flip instructions by column number.
 our @FORMAT_COLUMNS    = (); our $format_ref    = {}; # Stores the format instructions by column number.
 my @MATCH_COLUMNS     = (); my $match_ref     = {}; # Stores regular expressions.
 our @NOT_MATCH_COLUMNS = (); our $not_match_ref = {}; # Stores regular expressions for -G.
@@ -484,44 +484,6 @@ sub execute_script_line( $ )
 }
 
 
-# Performs operations that require the entire file to be read
-# This includes deduplication, sorting, randomization, and averaging
-# param: None (operates on global variables)
-# return: None
-sub finalize_full_read_functions()
-{
-    if ( $opt{'d'} )
-    {
-        Pipe::Data::dedup_list( \@DDUP_COLUMNS );
-    }
-    if ( $opt{'r'} ) # select 'n'% of file at random for output.
-    {
-        Pipe::Data::randomize_list();
-    }
-    if ( $opt{'s'} )# Sort the items from STDIN.
-    {
-        # We have a list of lines. We will split them creating a key that we append to the start with a delimiter of ''
-        # When it comes time to sort use the default sort in perl and then remove the prefix.
-        Pipe::Data::sort_list( \@SORT_COLUMNS );
-    }
-    if ( $opt{'v'} ) # Compute averages now we have read the entire input.
-    {
-        foreach my $column ( keys %{$avg_ref} )
-        {
-            if ( exists $avg_count->{ $column } and $avg_count->{ $column } != 0 )
-            {
-                my $result = sprintf "%.3f", ( $avg_ref->{ $column } / $avg_count->{ $column } );
-                # replace the previous column sum with the average.
-                $avg_ref->{ $column } = $result;
-            }
-        }
-    }
-}
-
-# After you have finished reading and processing all lines in the input file
-# this function will manage the output.
-# param:  <none>
-# return: <none>
 
 # Tests if this is a line that the user requested to be output.
 # param:  integer line number.
@@ -1147,7 +1109,7 @@ while (<$ifh>)
 close $ifh;
 push @ALL_LINES, @LINE_BUFF;
 # Print out all results now we have fully read the entire input file and processed it.
-finalize_full_read_functions() if ( $READ_FULL );
+Pipe::Data::finalize_full_read_functions() if ( $READ_FULL );
 $LINE_NUMBER = 0;
 while ( @ALL_LINES )
 {
