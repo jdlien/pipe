@@ -18,7 +18,7 @@ Create the foundational modules that all other modules will depend on.
    ```
 
 2. **Move Constants**
-   - [ ] Extract all global constants from pipe.pl:
+   - [x] Extract all global constants from pipe.pl:
      - `$VERSION`
      - `$TRUE` / `$FALSE`
      - `$DELIMITER` / `$SUB_DELIMITER` / `$QUOTED_DELIMITER`
@@ -27,11 +27,11 @@ Create the foundational modules that all other modules will depend on.
      - Default values (buffer sizes, precision, etc.)
 
 3. **Move Basic Utilities**
-   - [ ] `trim()` - Remove whitespace
-   - [ ] `normalize()` - Text normalization
-   - [ ] `get_number_format()` - Number formatting
-   - [ ] `parse_line_ranges()` - Line range parsing
-   - [ ] Error handling utilities
+   - [x] `trim()` - Remove whitespace
+   - [x] `normalize()` - Text normalization
+   - [x] `get_number_format()` - Number formatting
+   - [ ] `parse_line_ranges()` - Line range parsing (moved to Pipe::Utils)
+   - [x] Error handling utilities
 
 4. **Create Export Lists**
    ```perl
@@ -51,9 +51,9 @@ Create the foundational modules that all other modules will depend on.
 ### Tasks
 
 1. **Design Context Object**
-   - [ ] Identify all global state variables
-   - [ ] Group related state variables
-   - [ ] Design accessor methods
+   - [x] Identify all global state variables
+   - [x] Group related state variables
+   - [x] Design accessor methods
 
 2. **Create Context Structure**
    ```perl
@@ -91,29 +91,29 @@ Create the foundational modules that all other modules will depend on.
    ```
 
 3. **Implement State Management Methods**
-   - [ ] Getters/setters for all state
-   - [ ] Reset methods for accumulators
-   - [ ] State validation methods
+   - [x] Getters/setters for all state
+   - [x] Reset methods for accumulators
+   - [x] State validation methods
 
 ## Integration Tasks
 
 1. **Update pipe.pl**
-   - [ ] Add `use lib 'lib';`
-   - [ ] Add `use Pipe::Core;`
-   - [ ] Add `use Pipe::Context;`
-   - [ ] Replace constants with imported versions
-   - [ ] Replace utility functions with module calls
+   - [x] Add `use lib 'lib';`
+   - [x] Add `use Pipe::Core;`
+   - [x] Add `use Pipe::Context;`
+   - [x] Replace constants with imported versions
+   - [x] Replace utility functions with module calls
 
 2. **Testing**
-   - [ ] Create t/01-core.t
-   - [ ] Create t/02-context.t
-   - [ ] Test all moved functions
-   - [ ] Verify constants are accessible
+   - [x] Create t/01-core.t
+   - [x] Create t/02-context.t
+   - [x] Test all moved functions
+   - [x] Verify constants are accessible
 
 3. **Documentation**
-   - [ ] Add POD documentation to modules
-   - [ ] Update CLAUDE.md with module information
-   - [ ] Document any API changes
+   - [x] Add POD documentation to modules
+   - [x] Update CLAUDE.md with module information
+   - [x] Document any API changes
 
 ## Example Implementation
 
@@ -186,9 +186,9 @@ sub normalize {
 
 ## Validation Checklist
 
-- [ ] All constants are accessible
-- [ ] Basic utilities work correctly
-- [ ] No performance regression
-- [ ] All existing tests pass
-- [ ] New tests provide good coverage
-- [ ] Documentation is complete
+- [x] All constants are accessible
+- [x] Basic utilities work correctly
+- [x] No performance regression
+- [x] All existing tests pass
+- [x] New tests provide good coverage
+- [x] Documentation is complete
