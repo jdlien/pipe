@@ -27,6 +27,7 @@
 # Created: Mon May 25 15:12:15 MDT 2015
 #
 # Rev:
+# 2.04.00 - May 29, 2025 Modularized pipe.pl into multiple modules, added tests.
 # 2.03.02 - Mar 22, 2023 Fixed -6 bug that fails on columns with 0 or text values.
 #
 ####################################################################################
@@ -56,7 +57,7 @@ binmode STDIN;
 ### Globals
 # Context object will be initialized after option processing
 my $ctx;
-my $VERSION           = qq{2.03.02};
+my $VERSION           = qq{2.04.00};
 my $FALSE             = 1;
 my $TRUE              = 0;
 my $ALLOW_SCRIPTING   = $TRUE;
@@ -551,26 +552,6 @@ sub is_printable_range( $$ )
     $FAST_FORWARD = 1 if ( $line_num >= $max_line_so_far );
     return $ret_value;
 }
-
-# Takes a string and encodes it with URL-safe characters.
-# param:  string.
-# return: encoded string.
-# map_url_characters function is now imported from Pipe::IO
-
-# Performs URL encoding of given columns.
-# param:  line from input.
-# return: <none>.
-
-# Builds a map of URL characters to URL encoded values.
-# param:  <none>
-# return: <none>
-# build_encoding_table function is now imported from Pipe::IO
-
-# Outputs table header or footer, depending on argument string.
-# param:  String of either 'HEAD' or 'FOOT'.
-# return: <none>
-
-
 
 
 # This function abstracts all line operations for line by line operations.
