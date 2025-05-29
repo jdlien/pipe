@@ -1,5 +1,9 @@
 # Phase 3: Column Operations Module
 
+**Note: This is historical documentation from the completed modularization project (May 2025).**
+
+---
+
 ## Objective
 Create Pipe::Column module to handle all column manipulation operations, continuing the modularization of pipe.pl.
 

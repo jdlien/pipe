@@ -1,4 +1,8 @@
-# Phase 1: Core Infrastructure Tasks
+# Phase 1: Core Infrastructure
+
+**Note: This is historical documentation from the completed modularization project (May 2025).**
+
+--- Tasks
 
 ## Objective
 Create the foundational modules that all other modules will depend on.

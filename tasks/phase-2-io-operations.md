@@ -1,5 +1,9 @@
 # Phase 2: I/O Operations Tasks
 
+**Note: This is historical documentation from the completed modularization project (May 2025).**
+
+---
+
 ## Objective
 Extract all input/output related functionality into a dedicated module.
 

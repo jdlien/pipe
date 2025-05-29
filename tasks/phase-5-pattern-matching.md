@@ -1,5 +1,9 @@
 # Phase 5: Pattern Matching Module
 
+**Note: This is historical documentation from the completed modularization project (May 2025).**
+
+---
+
 ## Objective
 Create Pipe::Match module to handle all pattern matching and filtering operations, continuing the modularization of pipe.pl.
 

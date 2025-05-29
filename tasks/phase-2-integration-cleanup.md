@@ -1,5 +1,9 @@
 # Phase 2: Integration Cleanup Tasks
 
+**Note: This is historical documentation from the completed modularization project (May 2025).**
+
+---
+
 ## Objective
 Actually integrate the Pipe::IO module into pipe.pl by replacing duplicate functions and removing redundant code.
 

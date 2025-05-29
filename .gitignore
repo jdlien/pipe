@@ -12,3 +12,10 @@ Readme-*
 spec-*
 test-*
 data/
+
+# Backup files
+*.bak
+*.backup
+*~
+*.swp
+*.swo

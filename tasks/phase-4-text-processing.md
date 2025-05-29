@@ -1,5 +1,9 @@
 # Phase 4: Text Processing Module
 
+**Note: This is historical documentation from the completed modularization project (May 2025).**
+
+---
+
 ## Objective
 Create Pipe::Text module to handle all text transformation operations, continuing the modularization of pipe.pl. This phase targets the largest group of text processing functions.
 

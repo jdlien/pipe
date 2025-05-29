@@ -40,6 +40,7 @@ use lib 'lib';
 use lib './lib';
 use lib '../lib';
 use Pipe::Core qw(trim get_number_format);
+use Pipe::Utils qw(:all);
 use Pipe::Context;
 use Pipe::IO qw(:output :encoding);
 use Pipe::Column qw(:all);
@@ -59,21 +60,21 @@ my $VERSION           = qq{2.03.02};
 my $FALSE             = 1;
 my $TRUE              = 0;
 my $ALLOW_SCRIPTING   = $TRUE;
-my $KEYWORD_ANY       = qw{any};
-my $KEYWORD_REMAINING = qw{remaining};
-my $KEYWORD_CONTINUE  = qw{continue};
-my $KEYWORD_LAST      = qw{last};
-my $KEYWORD_REVERSE   = qw{reverse};
-my $KEYWORD_EXCLUDE   = qw{exclude};
-my $KEYWORD_NUM_COLS  = qw{num_cols};
-my $RELAX_o_EXCLUDE   = 0; # If exclude selected don't validate the line is the same length as the inverted number fields.
-my $COLLAPSE_OPTION   = 0;
+our $KEYWORD_ANY       = qw{any};
+our $KEYWORD_REMAINING = qw{remaining};
+our $KEYWORD_CONTINUE  = qw{continue};
+our $KEYWORD_LAST      = qw{last};
+our $KEYWORD_REVERSE   = qw{reverse};
+our $KEYWORD_EXCLUDE   = qw{exclude};
+our $KEYWORD_NUM_COLS  = qw{num_cols};
+our $RELAX_o_EXCLUDE   = 0; # If exclude selected don't validate the line is the same length as the inverted number fields.
+our $COLLAPSE_OPTION   = 0;
 # Flag means that the entire file must be read for an operation like sort to work.
-my $LINE_RANGES       = {};
-my $MAX_LINE          = 100000000;
+our $LINE_RANGES       = {};
+our $MAX_LINE          = 100000000;
 $LINE_RANGES->{'1'}   = $MAX_LINE;
-my $READ_FULL         = 0; # Set true to read the entire file before output as with -L'-n'.
-my $KEEP_LINES        = 10; # Number of lines to keep in buffer if -L'-n' is used.
+our $READ_FULL         = 0; # Set true to read the entire file before output as with -L'-n'.
+our $KEEP_LINES        = 10; # Number of lines to keep in buffer if -L'-n' is used.
 my @LINE_BUFF         = (); # Buffer of last 'n' lines used with -L'-n'.
 my $FAST_FORWARD      = 0;  # 0 means keep reading 1 means stop reading input.
 our @ALL_LINES         = ();
@@ -88,7 +89,7 @@ my @SCRIPT_COLUMNS    = (); my $script_ref    = {};
 #####
 my $LINE_NUMBER       = 0;
 my $LAST_LINE         = 0; # Used for -j to trim last delimiter.
-my $SKIP_LINE         = 0; # Used for -L for alternate line output.
+our $SKIP_LINE         = 0; # Used for -L for alternate line output.
 my @PREVIOUS_LINES    = (); my $BUFF_SIZE = 0; # Display the 'n' lines before the match.
 push @PREVIOUS_LINES, "BOF";
 our @INCR_COLUMNS      = ();                          # Columns to increment.
@@ -115,7 +116,7 @@ my @MASK_COLUMNS      = (); my $mask_ref      = {}; # Stores the masks by column
 my @SUBS_COLUMNS      = (); my $subs_ref      = {}; # Stores the sub string indexes by column number.
 my @PAD_COLUMNS       = (); my $pad_ref       = {}; # Stores the pad instructions by column number.
 my @FLIP_COLUMNS      = (); my $flip_ref      = {}; # Stores the flip instructions by column number.
-my @FORMAT_COLUMNS    = (); my $format_ref    = {}; # Stores the format instructions by column number.
+our @FORMAT_COLUMNS    = (); our $format_ref    = {}; # Stores the format instructions by column number.
 my @MATCH_COLUMNS     = (); my $match_ref     = {}; # Stores regular expressions.
 our @NOT_MATCH_COLUMNS = (); our $not_match_ref = {}; # Stores regular expressions for -G.
 my $IS_X_MATCH        = 0;                          # True if -X matched.
@@ -441,193 +442,8 @@ EOF
     exit;
 }
 
-# Takes a single argument from the command line in pipe.pl style input and returns a list of the column index and the value supplied.
-# Looks like this: -2c1:1000, where '-2' is the flag, c1 is the column requested, and 1000 the additional input for the column. A reset value is also allowed as in -2c1:1000,1200, which resets the increment to 1000 after 1200 is reached.
-# param:  string argument from the command line.
-# return: List of 2 values, the column index and the requested value. In the example above the return values are (1, 1000).
-sub parse_single_column_single_argument( $ )
-{
-    my $input = shift;
-    if ( $input =~ m/^c\d{1,}/i )
-    {
-        my ( $colNum, $value ) = split ':', $input;
-        my $reset = '';    # might not be used if user doesn't specify a reset value.
-        $colNum =~ s/c//i; # get rid of the 'c' because it causes problems later.
-        # There may be an additional value after the column specifier (or not).
-        if ( $input =~ m/:/ )
-        {
-            $value = $';
-            if ( $input =~ m/,/ )
-            {
-                ( $value, $reset ) = split '\s?,\s?', $value;
-                $value = trim( $value );
-                $reset = trim( $reset );
-            }
-            printf STDERR "increment start='%s', end='%s'\n", $value, $reset if ( $opt{'D'} );
-        }
-        if ( ! $value )
-        {
-            $value = 0;
-        }
-        return ( $colNum, $value, $reset );
-    }
-    printf STDERR "** error parsing column specification in '%s'\n", $input;
-    exit( 0 );
-}
 
 
-# Parses the ranges of lines requested by the user.
-# parse the user's instructions and print out the lines selected.
-# n = exactly the 'n'th line.
-# n- = print from line 'n' on.
-# +n = print the first 'n' lines.
-# -n = print the last 'n' lines.
-# n-m = exactly the range of lines from n to m.
-# n,m-p = print n and range n-p (optional).
-# param:  String that lists all of the ranges.
-# return: <none>.
-sub parse_line_ranges( $ )
-{
-    my $range_str = shift;
-    if ( $range_str =~ m/^skip/ )
-    {
-        my $skip = $' + 0;
-        if ( ! $skip or $skip !~ m/\d+/ )
-        {
-            printf STDERR "** error '-L' skip option takes an integer value greater than 0, supplied '%s'\n", $opt{'L'};
-            exit;
-        }
-        $SKIP_LINE = $skip; # The integer value stored here will be used to modulus the line numbers in process_line().
-        return;
-    }
-    $range_str    =~ s/\s+//g;
-    my @r         = split ',', $range_str;
-    my $ranges    = \@r;
-    while ( @{ $ranges } )
-    {
-        my $range = shift @{ $ranges };
-        # Clear the default of all lines, or else all lines will be considered.
-        # Parse the ranges from the input strings.
-        # Set the start (key) and end (value) to a specific value.
-        if ( $range =~ m/^\-\d+$/ ) # parses from line 'n' to the end of the file.
-        {
-            $READ_FULL = 1; # Set true to read the entire file before output as with -L'-n'.
-            # get rid of the previous rule that outputs all lines.
-            delete $LINE_RANGES->{ '1' } if ( exists $LINE_RANGES->{ '1' } and $LINE_RANGES->{ '1' } == $MAX_LINE );
-            my $num = substr $range, 1;
-            $LINE_RANGES->{ (0 -$num) } = $MAX_LINE;
-            $KEEP_LINES  = $num; # Number of lines to keep in buffer if -L'-n' is used.
-        }
-        elsif ( $range =~ m/^\+\d+$/ ) # parses from beginning of file upto the given range.
-        {
-            # The rule for line 1 is automatically over written.
-            my $num = substr $range, 1;
-            $LINE_RANGES->{ '1' } = $num;
-        }
-        elsif ( $range =~ m/^\d+\-\d+$/ ) # User has selected a range of lines from n-m.
-        {
-            # Remove the default rule for the entire range.
-            delete $LINE_RANGES->{ '1' } if ( exists $LINE_RANGES->{ '1' } and $LINE_RANGES->{ '1' } == $MAX_LINE );
-            my @v = split '-', $range;
-            $LINE_RANGES->{ $v[ 0 ] } = $v[ 1 ];
-        }
-        elsif ( $range =~ m/^\d+\-$/ ) # Select all lines from 'n' on.
-        {
-            # Remove the default rule for the entire range.
-            delete $LINE_RANGES->{ '1' } if ( exists $LINE_RANGES->{ '1' } and $LINE_RANGES->{ '1' } == $MAX_LINE );
-            my $num = substr $range, 0, length( $range ) -1;
-            $LINE_RANGES->{ $num } = $MAX_LINE;
-        }
-        elsif ( $range =~ m/^\d+$/ ) # Select a specific line number.
-        {
-            # Remove the default rule for the entire range.
-            delete $LINE_RANGES->{ '1' } if ( exists $LINE_RANGES->{ '1' } and $LINE_RANGES->{ '1' } == $MAX_LINE );
-            $LINE_RANGES->{ $range } = $range;
-        }
-        else
-        {
-            printf STDERR "** pipe syntax error in line number range definition: '%s'\n", $range_str;
-            exit 1;
-        }
-    }
-}
-
-# Reads the values supplied on the command line and parses them out into the argument list.
-# param:  command line string of requested columns.
-# param:  command "any" if the caller is allowed to operate on any column without restriction.
-# return: New array.
-sub read_requested_columns
-{
-    my $line             = shift;
-    my @allowed_keywords = @_;
-    # printf STDERR "-->%s<--\n", @allowed_keywords;
-    my @list = ();
-    # Since we can't split if there is no delimiter character, let's introduce one if there isn't one.
-    $line .= "," if ( $line !~ m/,/ );
-    my @cols = split( '\s?,\s?', $line );
-    # my @cols = split( ',', $line );
-    foreach my $colNum ( @cols )
-    {
-        # Columns are designated with 'c' prefix to get over the problem of perl not recognizing
-        # '0' as a legitimate column number.
-        if ( $colNum =~ m/[C|c]\d{1,}/ )
-        {
-            $colNum =~ s/c//i; # get rid of the 'c' because it causes problems later.
-            push( @list, (trim( $colNum ) + 0) );
-        }
-        elsif ( $colNum =~ m/^any$/i && grep /($KEYWORD_ANY)/, @allowed_keywords )
-        {
-            # Clear any other column selections the user may have already requested.
-            @list = ();
-            push( @list, $KEYWORD_ANY );
-            last; # don't allow user to add more.
-        }
-        elsif ( $colNum =~ m/^remaining$/i && grep /($KEYWORD_REMAINING)/, @allowed_keywords )
-        {
-            # Keep all the columns collected so far, but tack on the keyword as a marker
-            # that the remaining fields (if any) should be appended in order.
-            push( @list, $KEYWORD_REMAINING );
-            last; # don't allow user to add more.
-        }
-        elsif ( $colNum =~ m/^continue$/i && grep /($KEYWORD_CONTINUE)/, @allowed_keywords )
-        {
-            # Keep all the columns collected so far, but tack on the keyword as a marker
-            # that the remaining fields (if any) should be appended in order.
-            push( @list, $KEYWORD_CONTINUE );
-            last; # don't allow user to add more.
-        }
-        # $, $KEYWORD_REVERSE
-        elsif ( $colNum =~ m/^last$/i && grep /($KEYWORD_LAST)/, @allowed_keywords )
-        {
-            # use the last column.
-            push( @list, $KEYWORD_LAST );
-            last; # don't allow user to add more.
-        }
-        elsif ( $colNum =~ m/^reverse$/i && grep /($KEYWORD_REVERSE)/, @allowed_keywords )
-        {
-            # use the last column.
-            push( @list, $KEYWORD_REVERSE );
-            last; # don't allow user to add more.
-        }
-        elsif ( $colNum =~ m/^exclude$/i && grep /($KEYWORD_EXCLUDE)/, @allowed_keywords )
-        {
-            # use the inverted set of columns.
-            # Add the keyword as the FIRST element, then order_line() will exclude the rest of the listed columns
-            unshift( @list, $KEYWORD_EXCLUDE );
-        }
-        else
-        {
-            print STDERR "** Warning: illegal column designation '$colNum', ignoring.\n";
-        }
-    }
-    if ( scalar(@list) == 0 )
-    {
-        print STDERR "*** Error no valid columns selected. ***\n";
-        exit;
-    }
-    print STDERR "columns requested: '@list'\n" if ( $opt{'D'} );
-    return @list;
-}
 
 # Compression refers to removing white space and normalizing all
 # alphabetic characters into upper case.
@@ -663,22 +479,6 @@ sub read_requested_columns
 
 
 
-# Test if argument is a number between 0-100.
-# param:  number to test.
-# return: 1 if the argument is a number between 0-100, and 0 otherwise.
-sub is_between_zero_and_hundred( $ )
-{
-    my $testValue = shift;
-    chomp $testValue;
-    if ( $testValue =~ m/^\d{1,3}$/)
-    {
-        if ( 0 <= $testValue and $testValue <= 100 )
-        {
-            return 1;
-        }
-    }
-    return 0;
-}
 
 # sort_list function is now imported from Pipe::Data
 
@@ -756,45 +556,6 @@ sub is_between_zero_and_hundred( $ )
 # param:  line of pipe delimited columns.
 # return: <none>.
 
-# This function fixes lines that have trailing empty pipe columns. If it is not used
-# lines are truncated after the last content-filled column.
-# param:  original line sent to the calling function.
-# param:  line after any modification.
-# param:  line number for reporting.
-# return: modified line with additional pipes if required.
-sub validate( $$$ )
-{
-    my ( $original, $modified, $line_no ) = @_;
-    my $count       = ( $original =~ tr/\|// );
-    my $final_count = ( $modified =~ tr/\|// );
-    printf STDERR "original: %d, modified: %d fields at line number %s.\n", $count, $final_count, $line_no if ( $opt{'D'} );
-    # if ( $opt{'V'} ) # Original
-    if ( $opt{'o'} ) # If you select -o this doesn't get done or extra fields are added even if you select 'V'
-    {
-        # But pad to the width of the columns selected -1, because pipe doesn't add a terminal pipe by default.
-        if ( $RELAX_o_EXCLUDE )
-        {
-            my @original_cols = split( /\|/, $original );
-            $count = ( scalar( @original_cols ) -1 ) - ( scalar(@ORDER_COLUMNS) -1 );
-        }
-        else
-        {
-            $count = scalar @ORDER_COLUMNS -1 if ( $count > scalar @ORDER_COLUMNS -1 );
-        }
-    }
-    # Normally this ensures the total number of columns in == out, but collapse
-    # can be set in the '-e' flag (modify_case_line() function).
-    if ( $final_count < $count && $COLLAPSE_OPTION == 0 )
-    {
-        my $iterations = $count - $final_count;
-        my $i = 0;
-        for ( $i = 0; $i < $iterations; $i++ )
-        {
-            $modified .= '|';
-        }
-    }
-    return $modified;
-}
 
 # Replaces a string conditionally.
 # param:  target string of the replacement.
@@ -803,85 +564,7 @@ sub validate( $$$ )
 # param:  replacement string on failure of conditional testing.
 # return: resultant string.
 
-# Applies format to requested string.
-# param:  String for conversion.
-# param:  Conversion type 'c', 'b', 'h', 'd'.
-# return: String with the specified modifications.
-sub convert_format( $$ )
-{
-    my ( $field, $format ) = @_;
-    my @format_parts       = split /\./, $format;
-    @format_parts          = grep /\S/, @format_parts;
-    # @format_parts can have 1 or 2 radix defined. If there is 1 the radix is
-    # the destination radix. If there are 2 the second is the destination radix
-    # and the source radix is the first value. If the user defines a from radix
-    # no matter what the data is, convert it to decimal, ready for the next step
-    # which will take the decimal number and convert it to the appropriate
-    # destination radix.
-    # To accomadate strings use an array.
-    my @in_array = ();
-    if ( $format_parts[1] )
-    {
-        if ( $format_parts[0] =~ /b/i )
-        {
-            push @in_array, oct( "0b" . $field );
-        }
-        elsif ( $format_parts[0] =~ /h/i )
-        {
-            push @in_array, oct( "0x" . $field );
-        }
-        elsif ( $format_parts[0] =~ /c/i )
-        {
-            @in_array = unpack( "C*", $field ); # Converts all values into ints.
-        }
-        else # Decimal
-        {
-            push @in_array, $field;
-        }
-        # Set the destination radix for the remainder of the calculation 
-        $format_parts[0] = $format_parts[1];
-    }
-    if ( $format_parts[0] =~ /c/i )
-    {
-        return pack( "C*", @in_array);
-    }
-    # So not a string so the value in $in_array[0] should be all there is to convert.
-    $field = join '', @in_array;
-    if ( $format_parts[0] =~ /b/i )
-    {
-        return sprintf( "%b", $field );
-    }
-    elsif ( $format_parts[0] =~ /h/i )
-    {
-        return sprintf( "%x", $field );
-    }
-    elsif ( $format_parts[0] =~ /d/i )
-    {
-        return sprintf( "%d", $field );
-    }
-    else
-    {
-        printf STDERR "** error unsupported option: '%s' \n", $format_parts[0];
-        exit(1);
-    }
-}
 
-# Formats the specified column to the desired base type.
-# param:  Original line input.
-# return: <none>.
-sub format_radix( $ )
-{
-    my $line = shift;
-    my $i    = 0;
-    for ( $i = 0; $i < scalar( @{ $line } ); $i++ )
-    {
-        if ( defined $FORMAT_COLUMNS[ $i ] and exists $format_ref->{ $i } )
-        {
-            printf STDERR "format expression: '%s' \n", $format_ref->{$i} if ( $opt{'D'} );
-            @{ $line }[ $i ] = convert_format( @{ $line }[ $i ], lc ( $format_ref->{ $i } ) );
-        }
-    }
-}
 
 # Executes script listed in '-k'.
 # param:  line input.
@@ -1309,7 +992,7 @@ sub process_line( $ )
         Pipe::Text::modify_case_line( \@columns, $case_ref ) if ( $opt{'e'} );
         Pipe::Text::replace_line( \@columns )           if ( $opt{'E'} );
         Pipe::Text::flip_char_line( \@columns )         if ( $opt{'f'} );
-        format_radix( \@columns )           if ( $opt{'F'} );
+        Pipe::Utils::format_radix( \@columns )           if ( $opt{'F'} ); # Function removed
         Pipe::Text::url_encode_line( \@columns )        if ( $opt{'u'} );
         Pipe::Text::translate_line( \@columns )         if ( $opt{'l'} );
         Pipe::Text::mask_line( \@columns )              if ( $opt{'m'} );
@@ -1343,7 +1026,7 @@ sub process_line( $ )
         }
     }
     $modified_line = join '|', @columns;
-    $line = validate( $line, $modified_line, $LINE_NUMBER );
+    $line = Pipe::Utils::validate( $line, $modified_line, $LINE_NUMBER );
     chomp $line;
     $line =~ s/\|/\n/g if ( $opt{'K'} );
     # Don't add a delimiter on the last line if not -j and not the last line.
@@ -1406,17 +1089,17 @@ sub init
     $MATCH_LIMIT       = Pipe::Column::read_whole_number( $opt{'7'} ) if ( $opt{'7'} );
     $DELIMITER         = $opt{'h'} if ( $opt{'h'} );
     $JOIN_COUNT        = Pipe::Column::read_whole_number( $opt{'q'} ) if ( $opt{'q'} );
-    @INCR_COLUMNS      = read_requested_columns( $opt{'1'} ) if ( $opt{'1'} );
+    @INCR_COLUMNS      = Pipe::Utils::read_requested_columns( $opt{'1'} ) if ( $opt{'1'} );
     @INCR3_COLUMNS     = Pipe::Column::read_requested_qualified_columns( $opt{'3'}, $increment_ref ) if ( $opt{'3'} );
-    @DELTA4_COLUMNS    = read_requested_columns( $opt{'4'} ) if ( $opt{'4'} );
-    @SUM_COLUMNS       = read_requested_columns( $opt{'a'} ) if ( $opt{'a'} );
-    @COUNT_COLUMNS     = read_requested_columns( $opt{'c'} ) if ( $opt{'c'} );
-    @EMPTY_COLUMNS     = read_requested_columns( $opt{'z'} ) if ( $opt{'z'} );
-    @SHOW_EMPTY_COLUMNS= read_requested_columns( $opt{'Z'} ) if ( $opt{'Z'} );
+    @DELTA4_COLUMNS    = Pipe::Utils::read_requested_columns( $opt{'4'} ) if ( $opt{'4'} );
+    @SUM_COLUMNS       = Pipe::Utils::read_requested_columns( $opt{'a'} ) if ( $opt{'a'} );
+    @COUNT_COLUMNS     = Pipe::Utils::read_requested_columns( $opt{'c'} ) if ( $opt{'c'} );
+    @EMPTY_COLUMNS     = Pipe::Utils::read_requested_columns( $opt{'z'} ) if ( $opt{'z'} );
+    @SHOW_EMPTY_COLUMNS= Pipe::Utils::read_requested_columns( $opt{'Z'} ) if ( $opt{'Z'} );
     if ( $opt{'u'} )
     {
         Pipe::IO::build_encoding_table();
-        @U_ENCODE_COLUMNS = read_requested_columns( $opt{'u'}, $KEYWORD_ANY );
+        @U_ENCODE_COLUMNS = Pipe::Utils::read_requested_columns( $opt{'u'}, $KEYWORD_ANY );
     }
     @COND_CMP_COLUMNS  = Pipe::Column::read_requested_qualified_columns( $opt{'C'}, $cond_cmp_ref, $KEYWORD_ANY, $KEYWORD_NUM_COLS )    if ( $opt{'C'} );
     @MATH_COLUMNS      = Pipe::Column::read_requested_qualified_columns( $opt{'?'}, $math_ref )        if ( $opt{'?'} );
@@ -1432,33 +1115,33 @@ sub init
     @TRANSLATE_COLUMNS = Pipe::Column::read_requested_qualified_columns( $opt{'l'}, $trans_ref, $KEYWORD_ANY )       if ( $opt{'l'} );
     @PAD_COLUMNS       = Pipe::Column::read_requested_qualified_columns( $opt{'p'}, $pad_ref )         if ( $opt{'p'} );
     @FLIP_COLUMNS      = Pipe::Column::read_requested_qualified_columns( $opt{'f'}, $flip_ref )        if ( $opt{'f'} );
-    @FORMAT_COLUMNS    = Pipe::Column::read_requested_qualified_columns( $opt{'F'}, $format_ref )      if ( $opt{'F'} );
-    @COMPARE_COLUMNS   = read_requested_columns( $opt{'b'} )                             if ( $opt{'b'} );
-    @NO_COMPARE_COLUMNS= read_requested_columns( $opt{'B'} )                             if ( $opt{'B'} );
-    @NORMAL_COLUMNS    = read_requested_columns( $opt{'n'}, $KEYWORD_ANY )               if ( $opt{'n'} );
-    @MERGE_COLUMNS     = read_requested_columns( $opt{'O'}, $KEYWORD_ANY )               if ( $opt{'O'} );
-    @ORDER_COLUMNS     = read_requested_columns( $opt{'o'}, $KEYWORD_REMAINING, $KEYWORD_CONTINUE, $KEYWORD_LAST, $KEYWORD_REVERSE, $KEYWORD_EXCLUDE )    if ( $opt{'o'} );
-    @TRIM_COLUMNS      = read_requested_columns( $opt{'t'}, $KEYWORD_ANY )               if ( $opt{'t'} );
+    @FORMAT_COLUMNS    = Pipe::Column::read_requested_qualified_columns( $opt{'F'}, $format_ref )      if ( $opt{'F'} ); # Related to removed format_radix function
+    @COMPARE_COLUMNS   = Pipe::Utils::read_requested_columns( $opt{'b'} )                             if ( $opt{'b'} );
+    @NO_COMPARE_COLUMNS= Pipe::Utils::read_requested_columns( $opt{'B'} )                             if ( $opt{'B'} );
+    @NORMAL_COLUMNS    = Pipe::Utils::read_requested_columns( $opt{'n'}, $KEYWORD_ANY )               if ( $opt{'n'} );
+    @MERGE_COLUMNS     = Pipe::Utils::read_requested_columns( $opt{'O'}, $KEYWORD_ANY )               if ( $opt{'O'} );
+    @ORDER_COLUMNS     = Pipe::Utils::read_requested_columns( $opt{'o'}, $KEYWORD_REMAINING, $KEYWORD_CONTINUE, $KEYWORD_LAST, $KEYWORD_REVERSE, $KEYWORD_EXCLUDE )    if ( $opt{'o'} );
+    @TRIM_COLUMNS      = Pipe::Utils::read_requested_columns( $opt{'t'}, $KEYWORD_ANY )               if ( $opt{'t'} );
     if ( $opt{'2'} )
     {
-        ($AUTO_INCR_COLUMN, $AUTO_INCR_SEED, $AUTO_INCR_RESET) = parse_single_column_single_argument( $opt{'2'} );
+        ($AUTO_INCR_COLUMN, $AUTO_INCR_SEED, $AUTO_INCR_RESET) = Pipe::Utils::parse_single_column_single_argument( $opt{'2'} );
         $AUTO_INCR_ORIG_VALUE = $AUTO_INCR_SEED;
     }
     @HISTOGRAM_COLUMN  = Pipe::Column::read_requested_qualified_columns( $opt{'6'}, $hist_ref )        if ( $opt{'6'} );
     if ( $opt{'v'} )
     {
-        @AVG_COLUMNS   = read_requested_columns( $opt{'v'} ) if ( $opt{'v'} );
+        @AVG_COLUMNS   = Pipe::Utils::read_requested_columns( $opt{'v'} ) if ( $opt{'v'} );
         $READ_FULL = 1;
     }
     if ( $opt{'d'} )
     {
-        @DDUP_COLUMNS  = read_requested_columns( $opt{'d'} );
+        @DDUP_COLUMNS  = Pipe::Utils::read_requested_columns( $opt{'d'} );
         $READ_FULL = 1;
     }
     # Output specific lines.
     if ( $opt{'L'} )
     {
-        parse_line_ranges( $opt{'L'} );
+        Pipe::Utils::parse_line_ranges( $opt{'L'} );
         if ( $opt{'D'} )
         {
             foreach ( my ( $start, $end ) = each %$LINE_RANGES )
@@ -1470,7 +1153,7 @@ sub init
     if ( $opt{'r'} )
     {
         $READ_FULL = 1;
-        if ( ! is_between_zero_and_hundred( $opt{'r'} ) )
+        if ( ! Pipe::Utils::is_between_zero_and_hundred( $opt{'r'} ) )
         {
             print STDERR "** error, invalid random percentage selection.\n";
             exit;
@@ -1478,12 +1161,12 @@ sub init
     }
     if ( $opt{'s'} )
     {
-        @SORT_COLUMNS  = read_requested_columns( $opt{'s'} );
+        @SORT_COLUMNS  = Pipe::Utils::read_requested_columns( $opt{'s'} );
         $READ_FULL = 1;
     }
     if ( $opt{'w'} )
     {
-        @WIDTH_COLUMNS  = read_requested_columns( $opt{'w'} );
+        @WIDTH_COLUMNS  = Pipe::Utils::read_requested_columns( $opt{'w'} );
         $READ_FULL = 1;
     }
     if ( $opt{'T'} )
@@ -1495,60 +1178,6 @@ sub init
     }
 }
 
-# This parses a string into a set of commands to be consumed by other functions. The 
-# command strings include columns (denoted with 'cn'), separated with a delimiter token of '+'.
-# The returned string may also include literal strings. Use '\+' if you wish to include 
-# a '+' in the literal string.
-# param:  array reference of column indexes. This is where you intend to store the columns that
-#         the consuming function will operate on.
-# param:  The input string. Example: 'c100+"dog eat dog"+c 2'
-# param:  1 if literal terms (used to fill in false values optionally), or 0, specifies columns
-#         all of which will be expected to be in the form of '[c|C]n' where n is a positive integer.
-# return: None. Side effect: argument array reference will contain integers, and strings.
-sub get_col_num_or_literal_command( $$$ )
-{
-    my $array_ref = shift;
-    my $line_string = shift;
-    my $is_literal_string = shift;
-    # Split on column identifiers, making sure we don't pick up any empty or blank column identifiers.
-    my @tmp = ();
-    if ( $is_literal_string )
-    {
-        @tmp = split( /\+/, $line_string ) if ( $line_string );
-        push(@tmp, $line_string) if ( ! @tmp );
-    }
-    else
-    {
-        @tmp = grep { /\S/ } split( /\+?\s?c/i, $line_string ) if ( $line_string );
-    }
-    foreach my $i ( @tmp )
-    {
-        push @{$array_ref}, $i if ( defined $i );
-    }
-}
-
-# Take the line input. Its the columns from the alternate file with the key of the comparison field.
-# Later we will add it to the line(s) from the data coming in (from STDIN).
-# return: nothing, but a hash reference is built of compare column keys, with merge columns as values.
-sub parse_M_line()
-{
-    # parse the expression that describes which columns of the ref file we want.
-    # -Mc1:c2?c3.c4 but more generally -Mcn:"[cm,...|'literal']?[cp,...|'literal'].[cq,...|'literal']"
-    foreach my $key ( keys %{$merge_expression_ref} )
-    {
-        printf STDERR "key : '%s' \n", $merge_expression_ref->{ $key } if ( $opt{'D'} );
-        # EXPRESSION [col_input]:[col_ref]?[true column index or literal].[false literal]
-        # Example: [col_input]:'c2?c3', OR: 'c4'
-        # Split on the '.'. The LHS is the test operator and true expression, the RHS is the false expression.
-        my ( $token, $ref_false_literals ) = split( m/(?<!\\)\./, $merge_expression_ref->{ $key } );
-        # Split the LHS on the '?'. The LHS of this operation is the column to compare to the column of the input file. The RHS is the true expression.
-        my ( $ref_file_columns, $ref_true_cols ) = split( m/(?<!\\)\?/, $token );
-        printf STDERR "ref_file_columns : '%s', ref_true_cols : '%s', ref_false_literals: '%s'\n", $ref_file_columns, $ref_true_cols, $ref_false_literals if ( $opt{'D'} );
-        get_col_num_or_literal_command( \@MERGE_REF_COLUMNS, $ref_file_columns, 0 ); # Parse out the column(s) for matching.
-        get_col_num_or_literal_command( \@REF_COLUMN_INDEX_TRUE, $ref_true_cols, 0 ); # Parse out the column(s) used if match true.
-        get_col_num_or_literal_command( \@REF_LITERALS_FALSE, $ref_false_literals, 1 ); # Parse out the literals used if match false.
-    }
-}
 
 # Used to collect the requested fields from the reference document read with -0. 
 # Each column selection is saved and appended if the match turns out to be true.
@@ -1567,7 +1196,7 @@ my $is_stdin = 0;
 if ( defined $opt{'0'} && defined $opt{'M'} )
 {
     # parse the command line after -M
-    parse_M_line();
+    Pipe::Utils::parse_M_line();
     #### We store an array ref of all the columns to merge if true (and false) but we have to have
     #### them in a hash for quick lookup by the specified value key. *** ADD THAT HERE.
     if ( $opt{'D'} )
