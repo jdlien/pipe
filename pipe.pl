@@ -45,6 +45,8 @@ use Pipe::IO qw(:output :encoding);
 use Pipe::Column qw(:all);
 use Pipe::Text;
 use Pipe::Match qw(:all);
+use Pipe::Math qw(:all);
+use Pipe::Data qw(:all);
 
 binmode STDOUT;
 binmode STDERR;
@@ -74,7 +76,7 @@ my $READ_FULL         = 0; # Set true to read the entire file before output as w
 my $KEEP_LINES        = 10; # Number of lines to keep in buffer if -L'-n' is used.
 my @LINE_BUFF         = (); # Buffer of last 'n' lines used with -L'-n'.
 my $FAST_FORWARD      = 0;  # 0 means keep reading 1 means stop reading input.
-my @ALL_LINES         = ();
+our @ALL_LINES         = ();
 # For every requested operation we need an array that can hold the columns
 # for that operation; in that way we can have multiple operations on different
 # columns working at the same time. We store different columns totals on a hash ref.
@@ -89,25 +91,25 @@ my $LAST_LINE         = 0; # Used for -j to trim last delimiter.
 my $SKIP_LINE         = 0; # Used for -L for alternate line output.
 my @PREVIOUS_LINES    = (); my $BUFF_SIZE = 0; # Display the 'n' lines before the match.
 push @PREVIOUS_LINES, "BOF";
-my @INCR_COLUMNS      = ();                          # Columns to increment.
+our @INCR_COLUMNS      = ();                          # Columns to increment.
 # Column and seed value to insert auto-increment columns into.
-my $AUTO_INCR_COLUMN  = (); my $AUTO_INCR_SEED= {};  my $AUTO_INCR_RESET = {};
-my $AUTO_INCR_ORIG_VALUE = 0; # Used if a reset value is selected.
-my @HISTOGRAM_COLUMN  = (); my $hist_ref      = {};  # Column for histogram and character to use.
-my @INCR3_COLUMNS     = (); my $increment_ref = {};  # Stores increment values for each of the target columns.
-my @DELTA4_COLUMNS    = (); my $delta_cols_ref= {};  # Stores columns we want deltas for, and previous lines value used in difference.
-my @COUNT_COLUMNS     = (); my $count_ref     = {};
-my @SUM_COLUMNS       = (); my $sum_ref       = {};
-my @WIDTH_COLUMNS     = (); my $width_min_ref = {}; my $width_max_ref = {}; my $width_line_min_ref = {}; my $width_line_max_ref = {};
-my @AVG_COLUMNS       = (); my $avg_ref       = {}; my $avg_count = {};
-my @DDUP_COLUMNS      = (); my $ddup_ref      = {};
+our $AUTO_INCR_COLUMN  = (); our $AUTO_INCR_SEED= {};  our $AUTO_INCR_RESET = {};
+our $AUTO_INCR_ORIG_VALUE = 0; # Used if a reset value is selected.
+our @HISTOGRAM_COLUMN  = (); our $hist_ref      = {};  # Column for histogram and character to use.
+our @INCR3_COLUMNS     = (); our $increment_ref = {};  # Stores increment values for each of the target columns.
+our @DELTA4_COLUMNS    = (); our $delta_cols_ref= {};  # Stores columns we want deltas for, and previous lines value used in difference.
+our @COUNT_COLUMNS     = (); our $count_ref     = {};
+our @SUM_COLUMNS       = (); our $sum_ref       = {};
+our @WIDTH_COLUMNS     = (); our $width_min_ref = {}; our $width_max_ref = {}; our $width_line_min_ref = {}; our $width_line_max_ref = {};
+our @AVG_COLUMNS       = (); our $avg_ref       = {}; our $avg_count = {};
+our @DDUP_COLUMNS      = (); our $ddup_ref      = {};
 my @CASE_COLUMNS      = (); my $case_ref      = {};
 my @REPLACE_COLUMNS   = (); my $replace_ref   = {}; # Replacement columns and content. Handled like -f.
 our @COND_CMP_COLUMNS  = (); our $cond_cmp_ref  = {}; # case switching expressions like uc,lc,mc.
 my @TRIM_COLUMNS      = ();
 my @ORDER_COLUMNS     = ();
 my @NORMAL_COLUMNS    = ();
-my @SORT_COLUMNS      = ();
+our @SORT_COLUMNS      = ();
 my @TRANSLATE_COLUMNS = (); my $trans_ref     = {}; # Translation values.
 my @MASK_COLUMNS      = (); my $mask_ref      = {}; # Stores the masks by column number.
 my @SUBS_COLUMNS      = (); my $subs_ref      = {}; # Stores the sub string indexes by column number.
@@ -125,7 +127,7 @@ my $continue_to_process_match = 0;                  # Set true if -X or -Y are n
 my @MATCH_START_COLS  = (); my $match_start_ref= {};# Stores each columns IS_MATCHED flag, and turns on -Y.
 my @MATCH_Y_COLUMNS   = (), my $match_y_ref    = {}; # Look ahead -Y test conditions supplied by user.
 my @U_ENCODE_COLUMNS  = (); my $url_characters = {}; # Stores the character mappings.
-my @MERGE_COLUMNS     = (); # List of columns to merge. The first is the anchor column.
+our @MERGE_COLUMNS     = (); # List of columns to merge. The first is the anchor column.
 our @EMPTY_COLUMNS     = (); # empty column number checks.
 our @SHOW_EMPTY_COLUMNS= (); # Show empty column number checks.
 our @COMPARE_COLUMNS   = (); # Compare all collected columns and report if equal.
@@ -135,21 +137,21 @@ my $END_OUTPUT        = 0;
 my $TAIL_OUTPUT       = 0; # Is this a request for the tail of the file.
 my $TABLE_OUTPUT      = 0;  my $TABLE_ATTR = '';     my $TOTAL_CSV_COLS = 0; # Does the user want to output to a table.
 my $BEGIN_VALUE       = ''; my $SKIP_LINE_TABLE = 0; my $SKIP_VALUE = ''; my $END_VALUE = ''; # Used in CHUNKED tables
-my $WIDTHS_COLUMNS    = {};
+our $WIDTHS_COLUMNS    = {};
 my $IS_A_POST_MATCH   = 0;  # For '-Q' region search display.
 my $JOIN_COUNT        = 0; # lines to continue to join if -H used.
 my $PRECISION         = 2; # Default precision of computed floating point number output.
 my $MATCH_LIMIT       = 1; my $MATCH_COUNT = 0; # Number of search matches output before exiting.
-my $IS_DATA_TO_MERGE  = $FALSE; 
-my @MERGE_SRC_COLUMNS = (); my @MERGE_REF_COLUMNS = (); # Columns from STDIN to compare with columns from second file (-0).
-my $merge_expression_ref  = {};
-my $REF_FILE_DATA_HREF    = {};
-my @REF_COLUMN_INDEX_TRUE = ();
-my @REF_LITERALS_FALSE    = ();
-my @MATH_COLUMNS          = (); my $math_ref = {}; # Math operations stored. math_ref contains the operator.
-my $J_CMD             = "";
-my $J_COUNT           = 0;
-my $J_BUCKET_COUNTS   = {};
+our $IS_DATA_TO_MERGE  = $FALSE; 
+our @MERGE_SRC_COLUMNS = (); our @MERGE_REF_COLUMNS = (); # Columns from STDIN to compare with columns from second file (-0).
+our $merge_expression_ref  = {};
+our $REF_FILE_DATA_HREF    = {};
+our @REF_COLUMN_INDEX_TRUE = ();
+our @REF_LITERALS_FALSE    = ();
+our @MATH_COLUMNS          = (); our $math_ref = {}; # Math operations stored. math_ref contains the operator.
+our $J_CMD             = "";
+our $J_COUNT           = 0;
+our $J_BUCKET_COUNTS   = {};
 my @ALT_LINES         = ();
 
 # Explains the usage of pipe.pl when -x is used or if there was an error with input.
@@ -643,96 +645,13 @@ sub read_requested_columns
 # return: <none>
 # print_summary function is now imported from Pipe::IO
 
-# Counts the non-empty values of specified columns.
-# param:  line to pull out columns from.
-# return: string line with requested columns removed.
-sub count( $ )
-{
-    my $line = shift;
-    foreach my $colIndex ( @COUNT_COLUMNS )
-    {
-        if ( defined @{ $line }[ $colIndex ] and @{ $line }[ $colIndex ] =~ m/\S/ )
-        {
-            $count_ref->{ "c$colIndex" }++;
-        }
-    }
-}
+# count function is now imported from Pipe::Math
 
-# Sums the non-empty values of specified columns.
-# param:  line to pull out columns from.
-# return: string line with requested columns removed.
-sub sum( $ )
-{
-    my $line = shift;
-    foreach my $colIndex ( @SUM_COLUMNS )
-    {
-        if ( defined @{ $line }[ $colIndex ] and trim( @{ $line }[ $colIndex ] ) =~ m/^[-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)?$/ )
-        {
-            $sum_ref->{ "c$colIndex" } += trim( @{ $line }[ $colIndex ] );
-        }
-    }
-}
+# sum function is now imported from Pipe::Math
 
-# Computes the maximum and minimum width of all the data in the column.
-# param:  line to pull out columns from.
-# param:  line number.
-# return: string line with requested columns removed.
-sub width( $$ )
-{
-    my $line = shift;
-    my $line_no = shift;
-    foreach my $colIndex ( @WIDTH_COLUMNS )
-    {
-        if ( defined @{ $line }[ $colIndex ] )
-        {
-            my $length = length @{ $line }[ $colIndex ];
-            printf STDERR "COL: '%s'::LEN '%d'\n", @{ $line }[ $colIndex ], $length if ( $opt{'D'} );
-            if ( ! exists $width_min_ref->{ "c$colIndex" } )
-            {
-                $width_line_min_ref->{ "c$colIndex" } = $line_no;
-                $width_min_ref->{ "c$colIndex" } = $length;
-            }
-            if ( ! exists $width_max_ref->{ "c$colIndex" } )
-            {
-                $width_line_max_ref->{ "c$colIndex" } = $line_no;
-                $width_max_ref->{ "c$colIndex" } = $length;
-            }
-            $width_line_min_ref->{ "c$colIndex" } = $line_no if ( $length < $width_min_ref->{ "c$colIndex" } );
-            $width_line_max_ref->{ "c$colIndex" } = $line_no if ( $length >= $width_max_ref->{ "c$colIndex" } );
-            $width_min_ref->{ "c$colIndex" } = $length if ( $length < $width_min_ref->{ "c$colIndex" } );
-            $width_max_ref->{ "c$colIndex" } = $length if ( $length >= $width_max_ref->{ "c$colIndex" } );
-        }
-        else
-        {
-            # Update the min width to '0' since other lines might have added a value - regardless this is the shortest.
-            $width_line_min_ref->{ "c$colIndex" } = $line_no; # And this is the last shortest (so far).
-            $width_min_ref->{ "c$colIndex" } = 0;
-            if ( ! exists $width_max_ref->{ "c$colIndex" } )
-            {
-                $width_line_max_ref->{ "c$colIndex" } = $line_no;
-                $width_max_ref->{ "c$colIndex" } = 0;
-            }
-        }
-    }
-    $WIDTHS_COLUMNS->{ @{ $line } } = $LINE_NUMBER;
-}
+# width function is now imported from Pipe::Math
 
-# Average the non-empty values of specified columns.
-# param:  line to pull out columns from.
-# return: string line with requested columns removed.
-sub average( $ )
-{
-    my $line = shift;
-    foreach my $colIndex ( @AVG_COLUMNS )
-    {
-        if ( defined @{ $line }[ $colIndex ] and trim( @{ $line }[ $colIndex ] ) =~ m/^[-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)?$/ )
-        {
-            $avg_ref->{ "c$colIndex" } += trim( @{ $line }[ $colIndex ] );
-            $avg_count->{ "c$colIndex" } = 0 if ( ! exists $avg_count->{ "c$colIndex" } );
-            $avg_count->{ "c$colIndex" }++;
-        }
-    }
-}
+# average function is now imported from Pipe::Math
 
 # Removes the white space from of specified columns.
 # param:  line to pull out columns from.
@@ -761,74 +680,7 @@ sub is_between_zero_and_hundred( $ )
     return 0;
 }
 
-# Sorts the ALL_LINES array using (O)1 space.
-# param:  list of columns to sort on.
-# return: <none> - reorders the ALL_LINES list.
-sub sort_list( $ )
-{
-    my $all_list_ref  = {};
-    my $wantedColumns = shift;
-    my $count         = 1;
-    while( @ALL_LINES )
-    {
-        my $line = shift @ALL_LINES;
-        chomp $line;
-        my $key = Pipe::Column::get_key( $line, $wantedColumns );
-        $key = Pipe::Text::normalize( $key ) if ( $opt{'N'} );
-        # Make the value.00000001 to make each key unique. If value is a number, sort numeric works.
-        # Where this breaks is if the values you want to sort are floats. In that case we should just
-        # add more least significant digits.
-        if ( trim( $key ) =~ m/^\d+\.\d+$/ )
-        {
-            $all_list_ref->{ $key . sprintf( "%.8d", $count ) } = $line;
-        }
-        else
-        {
-            $all_list_ref->{ $key . '.' . sprintf( "%.8d", $count ) } = $line;
-        }
-        $count++;
-    }
-    my @sortedKeysArray = ();
-    my @tempKeys        = ( keys %$all_list_ref );
-    # reverse sort?
-    if ( $opt{'R'} )
-    {
-        if ( $opt{'U'} )
-        {
-            @sortedKeysArray = sort { $b <=> $a } @tempKeys;
-        }
-        elsif ( $opt{'I'})
-        {
-            @sortedKeysArray = sort { lc($b) cmp lc($a) } @tempKeys;
-        }
-        else
-        {
-            @sortedKeysArray = sort { $b cmp $a } @tempKeys;
-        }
-    }
-    else # Sort descending.
-    {
-        if ( $opt{'U'} )
-        {
-            @sortedKeysArray = sort { $a <=> $b } @tempKeys;
-        }
-        elsif ( $opt{'I'})
-        {
-            @sortedKeysArray = sort { lc($a) cmp lc($b) } @tempKeys;
-        }
-        else
-        {
-            @sortedKeysArray = sort { $a cmp $b } @tempKeys;
-        }
-    }
-    # now remove the key from the start of the entry for each line in the array.
-    while ( @sortedKeysArray )
-    {
-        my $key = shift @sortedKeysArray;
-        print STDERR "\$key=$key\n" if ( $opt{'D'} );
-        push @ALL_LINES, $all_list_ref->{ $key };
-    }
-}
+# sort_list function is now imported from Pipe::Data
 
 # Outputs data from argument line as a table of one type or another.
 # param:  String of line data - pipe-delimited.
@@ -1070,209 +922,17 @@ sub execute_script_line( $ )
     }
 }
 
-# Increments values in column data.
-# param:  Array reference of line's columns.
-# return: string with table formatting.
-sub inc_line( $ )
-{
-    my $line = shift;
-    foreach my $colIndex ( @INCR_COLUMNS )
-    {
-        if ( defined @{ $line }[ $colIndex ] )
-        {
-            @{ $line }[ $colIndex ]++;
-        }
-    }
-}
+# inc_line function is now imported from Pipe::Math
 
-# Increments values in column data by a given step.
-# param:  Array reference of line's columns.
-# return: <none>
-sub inc_line_by_value( $ )
-{
-    my $line    = shift;
-    foreach my $colIndex ( @INCR3_COLUMNS )
-    {
-        if ( defined @{ $line }[ $colIndex ] )
-        {
-            if ( $increment_ref->{ $colIndex } =~ m/^(\-)?\d+(\.\d+)?$/ )
-            {
-                @{ $line }[ $colIndex ] += $increment_ref->{ $colIndex };
-            }
-            else
-            {
-                printf STDERR "* warning invalid increment value: '%s'\n", $increment_ref->{ $colIndex } if ( $opt{'D'} );
-            }
-        }
-    }
-}
+# inc_line_by_value function is now imported from Pipe::Math
 
-# Performs math operations on columns.
-sub do_math( $ )
-{
-    my $line    = shift;
-    my $count_numeric_columns = 0;
-    my $result  = 0.0;
-    foreach my $colIndex ( @MATH_COLUMNS )
-    {
-        $colIndex =~ s/c//i;
-        if ( defined @{ $line }[ $colIndex ] )
-        {
-            # Guard against values that can't be operated on mathematically.
-            if ( @{ $line }[ $colIndex ] !~ m/^[-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)?$/ )
-            {
-                printf STDERR "* warning can't use '%s' for computation.\n", @{ $line }[ $colIndex ] if ( $opt{'D'} );
-                next;
-            }
-            # You have to store the first value @line[0] if it exists and is numeric to pre populate the result for mul, div, sub.
-            if ( $count_numeric_columns == 0 )
-            {
-                $result = @{ $line }[ $colIndex ];
-                $count_numeric_columns++;
-                next;
-            }
-            if ( exists $math_ref->{'add'} )
-            {
-                $result += @{ $line }[ $colIndex ];
-            }
-            elsif ( exists $math_ref->{'sub'} )
-            {
-                $result -= @{ $line }[ $colIndex ];
-            }
-            elsif ( exists $math_ref->{'mul'} )
-            {
-                $result *= @{ $line }[ $colIndex ];
-            }
-            elsif ( exists $math_ref->{'div'} )
-            {   
-                if ( @{ $line }[ $colIndex ] == 0 )
-                {
-                    printf STDERR "*** error divide by 0 error.\n" if ( $opt{'D'} );
-                    $result = "NaN";
-                } 
-                else
-                {
-                    $result /= @{ $line }[ $colIndex ];
-                }
-            }
-            else
-            {
-                printf STDERR "*** error unsupported operation '%s'.\n", keys %{$math_ref};
-                exit();
-            }
-        }
-        $count_numeric_columns++;
-    }
-    # Place the result in the '0'th field.
-    unshift @{ $line }, get_number_format( $result, 0, $PRECISION );
-}
+# do_math function is now imported from Pipe::Math
 
-# Computes the difference between this line and the previous and outputs that difference.
-# param:  Array reference of line's columns.
-# return: <none>
-sub delta_previous_line( $ )
-{
-    # my @DELTA4_COLUMNS    = (); my $delta_cols_ref= {};
-    my $line    = shift;
-    foreach my $colIndex ( @DELTA4_COLUMNS )
-    {
-        if ( defined @{ $line }[ $colIndex ] )
-        {
-            # Guard against values that can't be subtracted.
-            if ( @{ $line }[ $colIndex ] !~ m/^[-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)?$/ )
-            {
-                printf STDERR "* warning can't use '%s' for computation.\n", @{ $line }[ $colIndex ] if ( $opt{'D'} );
-                next;
-            }
-            # Save the first value
-            if ( ! exists $delta_cols_ref->{ $colIndex } )
-            {
-                $delta_cols_ref->{ $colIndex } = @{ $line }[ $colIndex ];
-                next;
-            }
-            # But if the '-R' reverse switch is used subtract this value from the previous line.
-            if ( $opt{'R'} )
-            {
-                # Save this rows orginial value in this row for the next row's calculation.
-                my $tmp = @{ $line }[ $colIndex ];
-                # Compute the new value for this row.
-                if ( $opt{'N'} )
-                {
-                    @{ $line }[ $colIndex ] = abs $delta_cols_ref->{ $colIndex } - @{ $line }[ $colIndex ];
-                }
-                else
-                {
-                    @{ $line }[ $colIndex ] = $delta_cols_ref->{ $colIndex } - @{ $line }[ $colIndex ];
-                }
-                $delta_cols_ref->{ $colIndex } = $tmp;
-            }
-            else
-            {
-                # Save this rows orginial value in this row for the next row's calculation.
-                my $tmp = @{ $line }[ $colIndex ];
-                # Compute the new value for this row.
-                if ( $opt{'N'} )
-                {
-                    @{ $line }[ $colIndex ] = abs @{ $line }[ $colIndex ] - $delta_cols_ref->{ $colIndex };
-                }
-                else
-                {
-                    @{ $line }[ $colIndex ] = @{ $line }[ $colIndex ] - $delta_cols_ref->{ $colIndex };
-                }
-                $delta_cols_ref->{ $colIndex } = $tmp;
-            }
-        }
-    }
-}
+# delta_previous_line function is now imported from Pipe::Math
 
-# Adds an auto-incremented field to the output line in the column position specified.
-# param:  Array reference of line's columns.
-# return: string with table formatting.
-sub add_auto_increment( $ )
-{
-    my $line = shift;
-    my $size = scalar( @{ $line } );
-    if ( $AUTO_INCR_COLUMN >= $size )
-    {
-        push @{ $line }, $AUTO_INCR_SEED++;
-    }
-    else
-    {
-        splice @{ $line }, $AUTO_INCR_COLUMN, 0, $AUTO_INCR_SEED++;
-    }
-    # The start and end range are inclusive, so we have to increment the AUTO_INCR_RESET by 1 with the post increment
-    # code above.
-    if ( $AUTO_INCR_RESET =~ m/^\d+$/ && $AUTO_INCR_SEED =~ m/^\d+$/ )
-    {
-        $AUTO_INCR_SEED = $AUTO_INCR_ORIG_VALUE if ( $AUTO_INCR_RESET && $AUTO_INCR_SEED >= $AUTO_INCR_RESET + 1 );
-    }
-    else
-    {
-        $AUTO_INCR_SEED = $AUTO_INCR_ORIG_VALUE if ( $AUTO_INCR_RESET && $AUTO_INCR_SEED gt $AUTO_INCR_RESET );
-    }
-}
+# add_auto_increment function is now imported from Pipe::Math
 
-# Shows histogram of columns value.
-# param:  Array reference of line's columns.
-# return: character(s) to be used for graphing.
-sub histogram( $ )
-{
-    my $line = shift;
-    foreach my $colIndex ( @HISTOGRAM_COLUMN )
-    {
-        if ( defined @{ $line }[ $colIndex ] )
-        {
-            printf STDERR "stored column:%s\n", @{ $line }[ $colIndex ] if ( $opt{'D'} );
-            my $range_whole_number = Pipe::Column::read_whole_number( @{ $line }[ $colIndex ] );
-            my @new_string = ();
-            foreach my $i ( 1..$range_whole_number )
-            {
-                push @new_string, $hist_ref->{ $colIndex };
-            }
-            @{ $line }[ $colIndex ] = join '', @new_string;
-        }
-    }
-}
+# histogram function is now imported from Pipe::Math
 
 # Computes and returns a value based on whether -A (count) or -J (sum) is used.
 # param:  column to select within line. Like 'c2'.
@@ -1289,211 +949,11 @@ sub histogram( $ )
 # get_number_format function is now imported from Pipe::Core
 # (Original implementation moved to lib/Pipe/Core.pm)
 
-# Does an extended math operation on a group.
-# param: The operation string (min,max,avg,sum).
-# param: The variable where the computed value is placed.
-# param: The value from the selected field.
-# return: none
-sub do_op( $$$ )
-{
-    my $key = shift;
-    my $cur = shift;
-    my $val = shift;
-    if ( $val !~ /^[+|-]?\d{1,}(\.\d{1,})?$/ )
-    {
-        printf STDERR "skipping non-numeric value on $LINE_NUMBER\n" if ( $opt{'D'} );
-        return $cur;
-    }
-    $J_COUNT++;
-    $J_BUCKET_COUNTS->{ $key }++;
-    return $val if ( $cur eq "init" );
-    if ( $J_CMD =~ m/min/ )
-    {
-        if ( $val < $cur ) 
-        {
-            return $val;
-        }
-        else
-        {
-            return $cur;
-        }
-    }
-    elsif ( $J_CMD =~ m/max/ )
-    {
-        if ( $val > $cur ) 
-        {
-            return $val;
-        }
-        else
-        {
-            return $cur;
-        }
-    }
-    elsif ( $J_CMD =~ m/avg/ )
-    {
-        return ( $cur += $val );
-    }
-    elsif ( $J_CMD =~ m/sum/ )
-    {
-        # Same as default action.
-        return ( $cur += $val );
-    }
-    elsif ( $J_CMD =~ m/count/ )
-    {
-        return $J_COUNT;
-    }
-    else
-    {
-        return ( $cur += $val );
-    }
-}
+# do_op function is now imported from Pipe::Math
 
-# Dedups the ALL_LINES array using (O)1 space.
-# param:  list of columns to sort on.
-# return: <none> - removes duplicate values from the ALL_LINES list.
-sub dedup_list( $ )
-{
-    my $wantedColumns = shift;
-    my $count         = {};
-    while( @ALL_LINES )
-    {
-        my $line = shift @ALL_LINES;
-        chomp $line;
-        my $key = Pipe::Column::get_key( $line, $wantedColumns );
-        $key = lc( $key ) if ( $opt{'I'} );
-        $key = Pipe::Text::normalize( $key ) if ( $opt{'N'} );
-        $ddup_ref->{ $key } = $line;
-        if ( $opt{'A'} )
-        {
-            $count->{ $key } = 0 if ( ! exists $count->{ $key } );
-            $count->{ $key }++;
-        }
-        elsif ( $opt{'J'} )
-        {
-            if ( ! exists $count->{ $key } )
-            {
-                $count->{ $key } = "init";
-                $J_COUNT = 0;
-                $J_BUCKET_COUNTS->{ $key } = 0;
-            }
-            if ($opt{'J'} =~ m/^(min|max|avg|sum|count)/i )
-            {
-                $J_CMD = lc($&);
-                $opt{'J'} = $';
-            }
-            my $val = Pipe::Column::get_column_value( $opt{'J'}, $line );
-            $count->{ $key } = do_op( $key, $count->{ $key }, $val );
-        }
-        print STDERR "\$key=$key, \$value=$line\n" if ( $opt{'D'} );
-    }
-    my @tmp = ();
-    if ( $opt{'R'} )
-    {
-        if ( $opt{'U'} )
-        {
-            @tmp = sort { $b <=> $a } keys %{$ddup_ref};
-        }
-        else
-        {
-            @tmp = sort { $b cmp $a } keys %{$ddup_ref};
-        }
-    }
-    else
-    {
-        if ( $opt{'U'} )
-        {
-            @tmp = sort { $a <=> $b } keys %{$ddup_ref};
-        }
-        else
-        {
-            @tmp = sort { $a cmp $b } keys %{$ddup_ref};
-        }
-    }
-    while ( @tmp )
-    {
-        my $key = shift @tmp;
-        if ( $opt{'A'} )
-        {
-            my $summary = '';
-            if ( $opt{'P'} )
-            {
-                # Changed for consistency. Previously '|' would have been replaced before output.
-                $summary = sprintf "%s%s", get_number_format( $count->{ $key } ), $DELIMITER;
-            }
-            else
-            {
-                $summary = sprintf " %3s ", get_number_format( $count->{ $key } );
-            }
-            push @ALL_LINES, $summary . $ddup_ref->{ $key };
-        }
-        elsif ( $opt{'J'} )
-        {
-            my $summary = '';
-            if ( $J_CMD eq "avg" && $J_COUNT != 0 )
-            {
-                $count->{ $key } = ( $count->{ $key } / $J_BUCKET_COUNTS->{ $key } );
-            }
-            if ( $opt{'P'} )
-            {
-                $summary = sprintf "%s%s", get_number_format( $count->{ $key }, 0, $PRECISION ), $DELIMITER;
-            }
-            else
-            {
-                $summary = sprintf " %3s ", get_number_format( $count->{ $key }, 0, $PRECISION );
-            }
-            push @ALL_LINES, $summary . $ddup_ref->{ $key };
-        }
-        else
-        {
-            push @ALL_LINES, $ddup_ref->{ $key };
-        }
-        delete $ddup_ref->{ $key };
-    }
-}
+# dedup_list function is now imported from Pipe::Data
 
-# Randomizes the entire list of input lines.
-# param:  <none>
-# return: <none>
-sub randomize_list()
-{
-    # Convert the user requested number to a percent lines of the file.
-    my $count = int( ( $opt{ 'r' } / 100.0 ) * scalar @ALL_LINES ); # is already tested for valid percent in init().
-    $count = 1 if ( $count < 1 );
-    my $randomHash = {};
-    my $i = 0;
-    # Generate all the random numbers needed as indexes.
-    while ( $i != $count )
-    {
-        my $r = int( rand( scalar @ALL_LINES ) );
-        print "\$r=$r\n" if ( $opt{'D'} );
-        $randomHash->{ $r } = 1;
-        $i = scalar keys %$randomHash;
-    }
-    my @row_selection = keys %$randomHash;
-    my @new_array = ();
-    # Grab the values stored on the ALL_LINES array, but don't splice because
-    # that will change the size and indexes will miss.
-    while ( @row_selection )
-    {
-        my $index = shift @row_selection;
-        if ( defined $ALL_LINES[ $index ] )
-        {
-            chomp $ALL_LINES[ $index ];
-            push @new_array, $ALL_LINES[ $index ];
-        }
-    }
-    # Empty original list.
-    while ( @ALL_LINES )
-    {
-        shift @ALL_LINES;
-    }
-    # Place the randomized values back onto the @ALL_LINES array.
-    while ( @new_array )
-    {
-        my $value = shift @new_array;
-        push @ALL_LINES, $value;
-    }
-}
+# randomize_list function is now imported from Pipe::Data
 
 # Performs operations that require the entire file to be read
 # This includes deduplication, sorting, randomization, and averaging  
@@ -1503,17 +963,17 @@ sub finalize_full_read_functions()
 {
     if ( $opt{'d'} )
     {
-        dedup_list( \@DDUP_COLUMNS );
+        Pipe::Data::dedup_list( \@DDUP_COLUMNS );
     }
     if ( $opt{'r'} ) # select 'n'% of file at random for output.
     {
-        randomize_list();
+        Pipe::Data::randomize_list();
     }
     if ( $opt{'s'} )# Sort the items from STDIN.
     {
         # We have a list of lines. We will split them creating a key that we append to the start with a delimiter of ''
         # When it comes time to sort use the default sort in perl and then remove the prefix.
-        sort_list( \@SORT_COLUMNS );
+        Pipe::Data::sort_list( \@SORT_COLUMNS );
     }
     if ( $opt{'v'} ) # Compute averages now we have read the entire input.
     {
@@ -1842,9 +1302,9 @@ sub process_line( $ )
     if ( $continue_to_process_match )  ##### Majority of the testing and operations take place in this block.
     {
         Pipe::Column::merge_reference_file( \@columns )   if ( $IS_DATA_TO_MERGE ); ## -M + -0
-        inc_line( \@columns  )              if ( $opt{'1'} );
-        inc_line_by_value( \@columns )      if ( $opt{'3'} );
-        delta_previous_line( \@columns )    if ( $opt{'4'} );
+        Pipe::Math::inc_line( \@columns  )              if ( $opt{'1'} );
+        Pipe::Math::inc_line_by_value( \@columns )      if ( $opt{'3'} );
+        Pipe::Math::delta_previous_line( \@columns )    if ( $opt{'4'} );
         execute_script_line( \@columns  )   if ( $opt{'k'} );
         Pipe::Text::modify_case_line( \@columns, $case_ref ) if ( $opt{'e'} );
         Pipe::Text::replace_line( \@columns )           if ( $opt{'E'} );
@@ -1857,15 +1317,15 @@ sub process_line( $ )
         Pipe::Text::normalize_line( \@columns, \@NORMAL_COLUMNS ) if ( $opt{'n'} );
         Pipe::Text::trim_line( \@columns, \@TRIM_COLUMNS ) if ( $opt{'t'} );
         Pipe::Text::pad_line( \@columns )               if ( $opt{'p'} );
-        width( \@columns, $LINE_NUMBER )    if ( $opt{'w'} );
-        sum( \@columns )                    if ( $opt{'a'} );
-        count( \@columns )                  if ( $opt{'c'} );
-        average( \@columns )                if ( $opt{'v'} );
-        do_math( \@columns )                if ( $opt{'?'} );
+        Pipe::Math::width( \@columns, $LINE_NUMBER )    if ( $opt{'w'} );
+        Pipe::Math::sum( \@columns )                    if ( $opt{'a'} );
+        Pipe::Math::count( \@columns )                  if ( $opt{'c'} );
+        Pipe::Math::average( \@columns )                if ( $opt{'v'} );
+        Pipe::Math::do_math( \@columns )                if ( $opt{'?'} );
         Pipe::Column::merge_line( \@columns )             if ( $opt{'O'} );
         Pipe::Column::order_line( \@columns, \@ORDER_COLUMNS ) if ( $opt{'o'} );
-        add_auto_increment( \@columns )     if ( $opt{'2'} );
-        histogram( \@columns )              if ( $opt{'6'} );
+        Pipe::Math::add_auto_increment( \@columns )     if ( $opt{'2'} );
+        Pipe::Math::histogram( \@columns )              if ( $opt{'6'} );
     }
     my $modified_line = '';
     if ( $TABLE_OUTPUT )
@@ -2092,42 +1552,7 @@ sub parse_M_line()
 
 # Used to collect the requested fields from the reference document read with -0. 
 # Each column selection is saved and appended if the match turns out to be true.
-# param:  col_index - a list of all the columns we want from each line.
-# param:  line from the file. Also an array of columns. We take the values from here and save them.
-# param:  Key of the column to store from the ref file.
-# return: none.
-sub push_merge_ref_columns( $$$ )
-{
-    my $col_index = shift;
-    my $line      = shift;
-    my $key_col   = shift;
-    return if ( ! defined $key_col );
-    # The indexes of the target columns we want are stored in order. Like: (3, 0, 1, ...).
-    $key_col = sprintf( "%d", $key_col );
-    my $key = @{$line}[ $key_col ];
-    $key = uc $key if ( $opt{'I'} ); # Compare key in upper case if '-I'.
-    $key = Pipe::Text::normalize( $key ) if ( $opt{'N'} );
-    # Return is the key is blank, like if the index is out of range, or the files have different delimiters.
-    return if ( ! defined $key );
-    my @string_values = ();
-    foreach my $i ( @{$col_index} )
-    {
-        if ( defined @{$line}[ $i ] )
-        {
-            push @string_values, @{$line}[ $i ];
-        }
-        elsif ( @REF_LITERALS_FALSE ) 
-        {
-            push @string_values, @REF_LITERALS_FALSE;
-        }
-        else
-        {
-            # Ensure a value if there aren't literals and no value or '0' stored in array.
-            push @string_values, '0' if ( $opt{'V'} );
-        }
-    }
-    $REF_FILE_DATA_HREF->{ $key } = join ',', @string_values if ( @string_values );
-}
+# push_merge_ref_columns function is now imported from Pipe::Data
 
 init();
 
@@ -2201,7 +1626,7 @@ if ( defined $opt{'0'} && defined $opt{'M'} )
                 }
             }
             # Save all the true and false column values.
-            push_merge_ref_columns( \@REF_COLUMN_INDEX_TRUE, \@columns, $MERGE_REF_COLUMNS[0] );
+            Pipe::Data::push_merge_ref_columns( \@REF_COLUMN_INDEX_TRUE, \@columns, $MERGE_REF_COLUMNS[0] );
             # The false values are literals taken from the command line.
         }
     }
