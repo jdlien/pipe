@@ -31,6 +31,11 @@ pipe/
 - As tasks are completed, update the relevant document to note the task status (complete, in progress, etc).
 - Note any issues or blockers in the task document.
 
+### Version Control
+
+- Before making significant changes, make atomic commits explaining what has changed.
+- After making significant changes, make commits with thorough descriptions of the changes.
+
 ### Important Considerations
 
 - **No Dependencies**: This project is written in Perl and does not make use of additional libraries or dependencies for production. If at all possible, avoid adding dependencies to this project. Only development dependencies are allowed.
