@@ -7,6 +7,171 @@ use utf8;
 use Pipe::Core qw(get_number_format);
 use Pipe::Column qw(read_whole_number);
 
+=head1 NAME
+
+Pipe::Math - Mathematical operations and aggregations for pipe.pl
+
+=head1 SYNOPSIS
+
+    use Pipe::Math qw(:all);
+    
+    # Count non-empty values
+    count(\@line);
+    
+    # Sum numeric values
+    sum(\@line);
+    
+    # Calculate column widths
+    width(\@line, $line_number);
+    
+    # Compute averages
+    average(\@line);
+    
+    # Increment values
+    inc_line(\@line);
+    inc_line_by_value(\@line);
+    
+    # Mathematical operations
+    do_math(\@line);
+    
+    # Delta calculations
+    delta_previous_line(\@line);
+    
+    # Auto-increment functionality
+    add_auto_increment(\@line);
+    
+    # Histogram generation
+    my $graph = histogram(\@line);
+
+=head1 DESCRIPTION
+
+Pipe::Math provides mathematical operations and statistical aggregations
+for the pipe.pl text processing tool. It handles counting, summation,
+averaging, width calculations, delta operations, and histogram generation.
+
+=head1 FUNCTIONS
+
+=head2 count($line_ref)
+
+Counts non-empty values in specified columns.
+
+Parameters:
+- $line_ref: Array reference to line data
+
+Returns: None (modifies global $main::count_ref)
+
+=head2 sum($line_ref)
+
+Sums numeric values in specified columns.
+
+Parameters:
+- $line_ref: Array reference to line data
+
+Returns: None (modifies global $main::sum_ref)
+
+=head2 width($line_ref, $line_number)
+
+Calculates minimum and maximum width of column values.
+
+Parameters:
+- $line_ref: Array reference to line data
+- $line_number: Current line number for tracking
+
+Returns: None (modifies global width reference variables)
+
+=head2 average($line_ref)
+
+Computes running averages for specified columns.
+
+Parameters:
+- $line_ref: Array reference to line data
+
+Returns: None (modifies global $main::avg_ref and $main::avg_count)
+
+=head2 inc_line($line_ref)
+
+Increments values in specified columns by 1.
+
+Parameters:
+- $line_ref: Array reference to line data
+
+Returns: None (modifies line data in place)
+
+=head2 inc_line_by_value($line_ref)
+
+Increments values in specified columns by their current values.
+
+Parameters:
+- $line_ref: Array reference to line data
+
+Returns: None (modifies line data in place)
+
+=head2 do_math($line_ref)
+
+Performs mathematical operations (add, subtract, multiply, divide) on columns.
+
+Parameters:
+- $line_ref: Array reference to line data
+
+Returns: None (modifies line data in place)
+
+=head2 delta_previous_line($line_ref)
+
+Calculates differences between current and previous line values.
+
+Parameters:
+- $line_ref: Array reference to line data
+
+Returns: None (modifies line data in place)
+
+=head2 add_auto_increment($line_ref)
+
+Adds auto-incrementing sequence numbers to lines.
+
+Parameters:
+- $line_ref: Array reference to line data
+
+Returns: None (modifies line data in place)
+
+=head2 histogram($line_ref)
+
+Generates histogram characters for specified columns.
+
+Parameters:
+- $line_ref: Array reference to line data
+
+Returns: String of histogram characters
+
+=head2 do_op($key, $current_value, $new_value)
+
+Helper function for performing aggregation operations (min, max, sum, avg).
+
+Parameters:
+- $key: Operation key identifier
+- $current_value: Current accumulated value
+- $new_value: New value to process
+
+Returns: Updated accumulated value
+
+=head1 DEPENDENCIES
+
+- Pipe::Core - For numeric formatting and utilities
+- Pipe::Column - For number reading operations
+
+=head1 GLOBAL VARIABLES
+
+This module accesses global variables from the main:: package including:
+- Column arrays (@COUNT_COLUMNS, @SUM_COLUMNS, @WIDTH_COLUMNS, etc.)
+- Reference hashes ($count_ref, $sum_ref, $width_*_ref, etc.)
+- Auto-increment variables ($AUTO_INCR_COLUMN, $AUTO_INCR_SEED, etc.)
+- Options hash (%opt) for flags like -D (debug), -R (reverse), -N (absolute)
+
+=head1 SEE ALSO
+
+L<Pipe::Core>, L<Pipe::Column>, L<Pipe::Data>
+
+=cut
+
 # Export functions to main package
 use Exporter 'import';
 our @EXPORT_OK = qw(

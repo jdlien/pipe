@@ -13,7 +13,7 @@ BEGIN {
 
 # Import required functions for testing
 use Pipe::Text;
-use Pipe::Core qw(:constants :keywords :functions);
+use Pipe::Core qw(:constants :keywords trim get_number_format parse_line_ranges);
 
 # Mock the missing is_number function 
 {
@@ -711,20 +711,21 @@ subtest 'missing branch coverage tests' => sub {
     
     # Test undefined mask_ref condition (line 216)
     local $main::mask_ref = undef;
-    my $result = mask_line(['hello', 'world']);
-    is_deeply($result, ['hello', 'world'], 'mask_line with undefined mask_ref returns unchanged data');
+    my @test_line_mask = ('hello', 'world');
+    mask_line(\@test_line_mask);
+    is_deeply(\@test_line_mask, ['hello', 'world'], 'mask_line with undefined mask_ref returns unchanged data');
     
     # Test undefined subs_ref condition (line 259)
     local $main::subs_ref = undef;
-    @test_line = ('hello', 'world');
-    $result = sub_string_line(\@test_line);
-    is_deeply(\@test_line, ['hello', 'world'], 'sub_string_line with undefined subs_ref returns unchanged data');
+    my @test_line_sub = ('hello', 'world');
+    my $result = sub_string_line(\@test_line_sub);
+    is_deeply(\@test_line_sub, ['hello', 'world'], 'sub_string_line with undefined subs_ref returns unchanged data');
     
     # Test undefined pad_ref condition (line 400)
     local $main::pad_ref = undef;
-    @test_line = ('hello', 'world');
-    $result = pad_line(\@test_line);
-    is_deeply(\@test_line, ['hello', 'world'], 'pad_line with undefined pad_ref returns unchanged data');
+    my @test_line_pad = ('hello', 'world');
+    $result = pad_line(\@test_line_pad);
+    is_deeply(\@test_line_pad, ['hello', 'world'], 'pad_line with undefined pad_ref returns unchanged data');
 };
 
 # Test complex condition coverage
@@ -855,32 +856,32 @@ subtest 'edge cases and boundary conditions' => sub {
 
 # Test additional uncovered branches
 subtest 'additional uncovered branches' => sub {
-    # Test replace function edge cases
+    # Test replace function with direct replacement values
     my @test_line = ('hello world', 'test string');
-    local $main::replace_ref = {0 => 'l:L', 1 => 'test:TEST'};
+    local $main::replace_ref = {0 => 'REPLACEMENT1', 1 => 'REPLACEMENT2'};
     
     replace_line(\@test_line);
-    is($test_line[0], 'heLLo worLd', 'replace_line replaces all occurrences in column 0');
-    is($test_line[1], 'TEST string', 'replace_line replaces string in column 1');
+    is($test_line[0], 'REPLACEMENT1', 'replace_line replaces content in column 0');
+    is($test_line[1], 'REPLACEMENT2', 'replace_line replaces content in column 1');
     
-    # Test apply_padding with various configurations
-    my $result = apply_padding('test', 'L10', ' ');
-    is($result, 'test      ', 'apply_padding left-pads to specified width');
+    # Test apply_padding with correct format (length[char])
+    my $result = apply_padding('test', '10');
+    is($result, 'test      ', 'apply_padding pads to specified width');
     
-    $result = apply_padding('test', 'R10', '*');
-    is($result, '******test', 'apply_padding right-pads with custom character');
+    $result = apply_padding('test', '10*');
+    is($result, 'test******', 'apply_padding pads with custom character');
     
-    $result = apply_padding('test', 'C8', '-');
-    is($result, '--test--', 'apply_padding center-pads with custom character');
+    $result = apply_padding('test', '8-');
+    is($result, 'test----', 'apply_padding pads with dash character');
     
-    # Test sub_string with various edge cases
-    $result = sub_string('hello world', '0,5');
+    # Test sub_string with correct format (start-end)
+    $result = sub_string('hello world', '1-5');
     is($result, 'hello', 'sub_string extracts from start position');
     
-    $result = sub_string('hello world', '6,5');
+    $result = sub_string('hello world', '7-11');
     is($result, 'world', 'sub_string extracts from middle position');
     
-    $result = sub_string('hello', '0,100');  # Length exceeds string
+    $result = sub_string('hello', '1-100');  # Length exceeds string
     is($result, 'hello', 'sub_string handles length exceeding string');
 };
 

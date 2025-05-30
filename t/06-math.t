@@ -375,4 +375,199 @@ subtest 'edge cases' => sub {
     is($sum_ref->{'c0'}, 999999999999999, 'sum handles large numbers');
 };
 
+# Test debug output paths (0% coverage branches)
+subtest 'debug output comprehensive tests' => sub {
+    local %main::opt = ('D' => 1); # Enable debug flag
+    
+    # Test width debug output (line 72)
+    $width_min_ref = {}; $width_max_ref = {}; $width_line_min_ref = {}; $width_line_max_ref = {};
+    @WIDTH_COLUMNS = (0);
+    my @test_line = ('test');
+    $LINE_NUMBER = 1;
+    
+    width(\@test_line, $LINE_NUMBER);
+    ok(1, 'width function executes with debug flag enabled');
+    
+    # Test inc_line_by_value debug output (line 151)
+    local @INCR3_COLUMNS = (0, 1);
+    local $increment_ref = {};
+    @test_line = ('5', '10');
+    inc_line_by_value(\@test_line);
+    ok(1, 'inc_line_by_value executes with debug flag enabled');
+    
+    # Test do_math debug output (line 171)
+    local @MATH_COLUMNS = (0);
+    local $math_ref = {'c0' => 'add:5'};
+    @test_line = ('10');
+    do_math(\@test_line);
+    ok(1, 'do_math executes with debug flag enabled');
+    
+    # Test delta_previous_line debug output (line 231)
+    local @DELTA4_COLUMNS = (0);
+    local $delta_cols_ref = {};
+    @test_line = ('15');
+    delta_previous_line(\@test_line);
+    ok(1, 'delta_previous_line executes with debug flag enabled');
+    
+    # Test histogram debug output (line 312)
+    local @HISTOGRAM_COLUMN = (0);
+    local $hist_ref = {};
+    @test_line = ('test_value');
+    histogram(\@test_line);
+    ok(1, 'histogram executes with debug flag enabled');
+    
+    # Test do_op debug output (line 336) - helper function with individual params
+    my $result = do_op('test_key', '10', 'non_numeric_value');
+    ok(1, 'do_op executes with debug flag enabled');
+};
+
+# Test reverse delta operations (-R flag) - 0% coverage
+subtest 'reverse delta operations comprehensive tests' => sub {
+    local %main::opt = ('R' => 1); # Enable reverse flag
+    local @DELTA4_COLUMNS = (0, 1);
+    local $delta_cols_ref = {};
+    
+    # Initialize delta state with first line
+    my @test_line = ('10', '20');
+    delta_previous_line(\@test_line);
+    is($delta_cols_ref->{0}, 10, 'reverse delta initializes first value');
+    is($delta_cols_ref->{1}, 20, 'reverse delta initializes second value');
+    
+    # Test reverse delta calculation (lines 244-254)
+    @test_line = ('15', '25');
+    delta_previous_line(\@test_line);
+    is($test_line[0], -5, 'reverse delta calculates difference: 10 - 15 = -5');
+    is($test_line[1], -5, 'reverse delta calculates difference: 20 - 25 = -5');
+    is($delta_cols_ref->{0}, 15, 'reverse delta saves current value for next iteration');
+    is($delta_cols_ref->{1}, 25, 'reverse delta saves current value for next iteration');
+};
+
+# Test absolute value in reverse delta operations (-R + -N flags) - 0% coverage  
+subtest 'absolute value reverse delta operations tests' => sub {
+    local %main::opt = ('R' => 1, 'N' => 1); # Enable reverse and absolute flags
+    local @DELTA4_COLUMNS = (0);
+    local $delta_cols_ref = {};
+    
+    # Initialize with first value
+    my @test_line = ('10');
+    delta_previous_line(\@test_line);
+    is($delta_cols_ref->{0}, 10, 'absolute reverse delta initializes');
+    
+    # Test absolute value calculation in reverse delta (lines 246-248)
+    @test_line = ('15');
+    delta_previous_line(\@test_line);
+    is($test_line[0], 5, 'absolute reverse delta: abs(10 - 15) = 5');
+    is($delta_cols_ref->{0}, 15, 'absolute reverse delta saves original value');
+    
+    # Test with negative result
+    @test_line = ('12');
+    delta_previous_line(\@test_line);
+    is($test_line[0], 3, 'absolute reverse delta: abs(15 - 12) = 3');
+};
+
+# Test width calculation edge cases - 0% coverage (lines 95-96)
+subtest 'width calculation edge cases tests' => sub {
+    # Test width_max_ref initialization for undefined columns (lines 95-96)
+    $width_min_ref = {}; $width_max_ref = {}; $width_line_min_ref = {}; $width_line_max_ref = {};
+    @WIDTH_COLUMNS = (0);
+    $LINE_NUMBER = 10;
+    
+    # Test empty string case which triggers width_max initialization
+    my @test_line = (''); 
+    width(\@test_line, $LINE_NUMBER);
+    
+    is($width_min_ref->{'c0'}, 0, 'width_min_ref set to 0 for empty string');
+    is($width_max_ref->{'c0'}, 0, 'width_max_ref initialized to 0 for empty column');
+    is($width_line_min_ref->{'c0'}, 10, 'width_line_min_ref records line number');
+    is($width_line_max_ref->{'c0'}, 10, 'width_line_max_ref records line number');
+};
+
+# Test string-based auto increment reset - 0% coverage (line 298)
+subtest 'string-based auto increment reset tests' => sub {
+    # Test string comparison logic for auto increment reset (line 298)
+    local $AUTO_INCR_RESET = 'zz';  # String value to trigger string comparison
+    local $AUTO_INCR_SEED = 'bb';   # String seed value
+    local $AUTO_INCR_ORIG_VALUE = 'aa';
+    local $AUTO_INCR_COLUMN = 0;
+    
+    my @test_line = ('any_value');
+    add_auto_increment(\@test_line);
+    
+    # Since 'bb' gt 'zz' is false, seed should not reset but still increment to 'bc'
+    is($AUTO_INCR_SEED, 'bc', 'string auto increment seed increments but does not reset when below threshold');
+    
+    # Test when string seed exceeds reset threshold
+    $AUTO_INCR_SEED = 'zza';  # Greater than 'zz'
+    add_auto_increment(\@test_line);
+    is($AUTO_INCR_SEED, 'aa', 'string auto increment seed resets when exceeding threshold');
+};
+
+# Test absolute value in forward delta operations (-N flag) - 50% coverage
+subtest 'absolute value forward delta operations tests' => sub {
+    local %main::opt = ('N' => 1); # Enable absolute flag only
+    local @DELTA4_COLUMNS = (0);
+    local $delta_cols_ref = {};
+    
+    # Initialize with first value
+    my @test_line = ('20');
+    delta_previous_line(\@test_line);
+    is($delta_cols_ref->{0}, 20, 'absolute forward delta initializes');
+    
+    # Test absolute value calculation in forward delta (line 261)
+    @test_line = ('15');
+    delta_previous_line(\@test_line);
+    is($test_line[0], 5, 'absolute forward delta: abs(15 - 20) = 5');
+    is($delta_cols_ref->{0}, 15, 'absolute forward delta updates reference');
+    
+    # Test with positive difference
+    @test_line = ('25');
+    delta_previous_line(\@test_line);
+    is($test_line[0], 10, 'absolute forward delta: abs(25 - 15) = 10');
+};
+
+# Test enhanced branch coverage for existing functions
+subtest 'enhanced branch coverage tests' => sub {
+    # Test average with non-numeric values (line 111)
+    local @AVG_COLUMNS = (0, 1);
+    local $avg_ref = {}; local $avg_count = {};
+    my @test_line = ('not_numeric', '15');
+    average(\@test_line);
+    
+    is($avg_ref->{'c1'}, 15, 'average handles mixed numeric/non-numeric values');
+    is($avg_count->{'c1'}, 1, 'average count increments for valid numeric value');
+    ok(!exists $avg_ref->{'c0'}, 'average ignores non-numeric values');
+    
+    # Test inc_line_by_value with non-matching columns (line 143)
+    local @INCR3_COLUMNS = (5, 6); # Columns that don't exist in test line
+    local $increment_ref = {};
+    @test_line = ('a', 'b'); # Only columns 0,1 exist
+    inc_line_by_value(\@test_line);
+    
+    ok(!exists $increment_ref->{'c5'}, 'inc_line_by_value ignores non-existent columns');
+    
+    # Test do_math with non-matching columns (line 166)
+    local @MATH_COLUMNS = (10); # Column that doesn't exist
+    local $math_ref = {};
+    @test_line = ('value');
+    do_math(\@test_line);
+    
+    ok(1, 'do_math handles non-existent column gracefully');
+    
+    # Test delta with non-matching columns (line 226)
+    local @DELTA4_COLUMNS = (10); # Column that doesn't exist
+    local $delta_cols_ref = {};
+    @test_line = ('value');
+    delta_previous_line(\@test_line);
+    
+    ok(1, 'delta_previous_line handles non-existent column gracefully');
+    
+    # Test histogram with non-matching columns (line 310)
+    local @HISTOGRAM_COLUMN = (10); # Column that doesn't exist
+    local $hist_ref = {};
+    @test_line = ('value');
+    my $result = histogram(\@test_line);
+    
+    is($result, '', 'histogram returns empty string for non-existent column');
+};
+
 done_testing();

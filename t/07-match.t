@@ -425,22 +425,22 @@ subtest 'conditional testing functions comprehensive tests' => sub {
 subtest 'string comparison operators comprehensive tests' => sub {
     local %main::opt = ('N' => 0, 'I' => 0, 'D' => 0, 'U' => 0);
     
-    # Test gt (greater than) string comparison
-    my $result = test_condition_cmp('gt', 'banana', 'apple'); # banana > apple
+    # Test gt (greater than) string comparison (operator, cmpValue, value)
+    my $result = test_condition_cmp('gt', 'apple', 'banana'); # banana > apple
     is($result, 1, 'test_condition_cmp string gt works (banana > apple)');
     
-    $result = test_condition_cmp('gt', 'apple', 'zebra'); # apple < zebra
+    $result = test_condition_cmp('gt', 'zebra', 'apple'); # apple < zebra
     is($result, 0, 'test_condition_cmp string gt works (apple < zebra)');
     
     # Test le (less than or equal) string comparison
-    $result = test_condition_cmp('le', 'apple', 'banana');
+    $result = test_condition_cmp('le', 'banana', 'apple');
     is($result, 1, 'test_condition_cmp string le works (apple <= banana)');
     
     $result = test_condition_cmp('le', 'apple', 'apple');
     is($result, 1, 'test_condition_cmp string le equal works');
     
     # Test ge (greater than or equal) string comparison
-    $result = test_condition_cmp('ge', 'banana', 'apple');
+    $result = test_condition_cmp('ge', 'apple', 'banana');
     is($result, 1, 'test_condition_cmp string ge works (banana >= apple)');
     
     $result = test_condition_cmp('ge', 'apple', 'apple');
@@ -519,17 +519,17 @@ subtest 'pattern matching edge cases and fallback scenarios' => sub {
 subtest 'numeric vs string comparison logic comprehensive tests' => sub {
     local %main::opt = ('N' => 0, 'I' => 0, 'D' => 0, 'U' => 0);
     
-    # Test all numeric comparison operators (fix parameter order)
-    my $result = test_condition_cmp('lt', '5', '10'); # 5 < 10
+    # Test all numeric comparison operators (operator, cmpValue, value)
+    my $result = test_condition_cmp('lt', '10', '5'); # 5 < 10
     is($result, 1, 'test_condition_cmp numeric lt works');
     
-    $result = test_condition_cmp('gt', '15', '10'); # 15 > 10  
+    $result = test_condition_cmp('gt', '10', '15'); # 15 > 10  
     is($result, 1, 'test_condition_cmp numeric gt works');
     
     $result = test_condition_cmp('le', '10', '10'); # 10 <= 10
     is($result, 1, 'test_condition_cmp numeric le equal works');
     
-    $result = test_condition_cmp('ge', '15', '10'); # 15 >= 10
+    $result = test_condition_cmp('ge', '10', '15'); # 15 >= 10
     is($result, 1, 'test_condition_cmp numeric ge works');
     
     $result = test_condition_cmp('ne', '5', '10');
@@ -770,30 +770,30 @@ subtest 'conditional operator any branch tests' => sub {
 subtest 'numeric comparison false branches comprehensive tests' => sub {
     local %main::opt = ('N' => 0, 'I' => 0, 'D' => 0, 'U' => 0);
     
-    # Test false branches for all numeric comparison operators
-    my $result = test_condition_cmp('eq', '10', '20'); # 10 != 20
+    # Test false branches for all numeric comparison operators (operator, cmpValue, value)
+    my $result = test_condition_cmp('eq', '20', '10'); # 10 != 20
     is($result, 0, 'numeric eq false branch works');
     
-    $result = test_condition_cmp('lt', '20', '10'); # 20 >= 10
+    $result = test_condition_cmp('lt', '10', '20'); # 20 >= 10
     is($result, 0, 'numeric lt false branch works');
     
-    $result = test_condition_cmp('gt', '5', '10'); # 5 <= 10
+    $result = test_condition_cmp('gt', '10', '5'); # 5 <= 10
     is($result, 0, 'numeric gt false branch works');
     
-    $result = test_condition_cmp('le', '15', '10'); # 15 > 10
+    $result = test_condition_cmp('le', '10', '15'); # 15 > 10
     is($result, 0, 'numeric le false branch works');
     
-    $result = test_condition_cmp('ge', '5', '10'); # 5 < 10
+    $result = test_condition_cmp('ge', '10', '5'); # 5 < 10
     is($result, 0, 'numeric ge false branch works');
     
     $result = test_condition_cmp('ne', '10', '10'); # 10 == 10
     is($result, 0, 'numeric ne false branch works');
     
     # Test false branches for string comparisons too
-    $result = test_condition_cmp('eq', 'apple', 'banana');
+    $result = test_condition_cmp('eq', 'banana', 'apple');
     is($result, 0, 'string eq false branch works');
     
-    $result = test_condition_cmp('lt', 'zebra', 'apple');
+    $result = test_condition_cmp('lt', 'apple', 'zebra');
     is($result, 0, 'string lt false branch works');
 };
 

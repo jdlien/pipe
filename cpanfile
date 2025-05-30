@@ -19,4 +19,5 @@ on 'test' => sub {
     requires 'Test::More', '1.302183';
     requires 'Test::Exception', '0.43';  # Better exception testing
     requires 'Test::Warn', '0.36';       # Warning testing
+    requires 'IO::String', '1.08';       # String I/O for testing
 };

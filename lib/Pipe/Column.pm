@@ -6,6 +6,134 @@ use utf8;
 use Exporter 'import';
 use Pipe::Core qw(:constants :keywords :functions);
 
+=head1 NAME
+
+Pipe::Column - Column operations and manipulation for pipe.pl
+
+=head1 SYNOPSIS
+
+    use Pipe::Column qw(:all);
+    
+    # Reorder columns
+    order_line(\@line_data);
+    
+    # Merge columns 
+    merge_line(\@line_data);
+    
+    # Parse qualified column specifications
+    my @columns = read_requested_qualified_columns(\@column_specs, $prefix);
+    
+    # Get numeric value from column
+    my $value = get_column_value($column_spec, $line_string);
+    
+    # Generate key from columns
+    my $key = get_key($line_string, \@column_indices);
+    
+    # Parse whole number safely
+    my $number = read_whole_number($input);
+    
+    # Merge reference file data
+    merge_reference_file(\@line_data);
+
+=head1 DESCRIPTION
+
+Pipe::Column provides column manipulation operations for the pipe.pl text processing tool.
+It handles column reordering, merging, parsing qualified column specifications with operators,
+reference file merging, and utility functions for column-based operations.
+
+=head1 FUNCTIONS
+
+=head2 order_line($line_ref, $order_cols_ref)
+
+Reorders columns in a line according to ORDER_COLUMNS specification.
+
+Parameters:
+- $line_ref: Array reference to line columns
+- $order_cols_ref: Array reference to order columns (optional, defaults to @main::ORDER_COLUMNS)
+
+Returns: None (modifies input array in-place)
+
+Supports keywords: 'remaining', 'continue', 'last', 'reverse', 'exclude', 'num_cols'
+
+=head2 merge_line($line_ref)
+
+Merges columns based on MERGE_COLUMNS and MERGE_SRC_COLUMNS specifications.
+
+Parameters:
+- $line_ref: Array reference to line columns
+
+Returns: None (modifies input array in-place)
+
+=head2 read_requested_qualified_columns($column_specs_ref, $prefix)
+
+Parses qualified column specifications with operators and qualifiers.
+
+Parameters:
+- $column_specs_ref: Array reference to column specifications (e.g., 'c0:add:5')
+- $prefix: String prefix for generated variable names
+
+Returns: Array of parsed column specifications
+
+Supports operators: add, sub, mul, div, range, and other qualifiers
+
+=head2 get_column_value($column_spec, $line_string)
+
+Extracts numeric value from specified column in a pipe-delimited line.
+
+Parameters:
+- $column_spec: Column specification (e.g., 'c0', '0')
+- $line_string: Pipe-delimited line string
+
+Returns: Numeric value from column, or 0 if non-numeric/non-existent
+
+=head2 get_key($line_string, $column_indices_ref)
+
+Generates concatenated key from specified columns in a line.
+
+Parameters:
+- $line_string: Pipe-delimited line string
+- $column_indices_ref: Array reference to column indices
+
+Returns: String key created by concatenating trimmed column values
+
+=head2 read_whole_number($input)
+
+Safely parses a whole number from input with validation.
+
+Parameters:
+- $input: String input to parse
+
+Returns: Numeric value if valid whole number, 0 if empty, exits on invalid input
+
+=head2 merge_reference_file($line_ref)
+
+Merges data from reference file based on key lookup.
+
+Parameters:
+- $line_ref: Array reference to line columns
+
+Returns: None (modifies input array in-place)
+
+Uses global variables: $main::REF_FILE_DATA_HREF, @main::MERGE_REF_COLUMNS
+
+=head1 DEPENDENCIES
+
+- Pipe::Core - For constants, keywords, and utility functions
+
+=head1 GLOBAL VARIABLES
+
+This module accesses global variables from the main:: package including:
+- Column arrays (@ORDER_COLUMNS, @MERGE_COLUMNS, @MERGE_SRC_COLUMNS, etc.)
+- Reference data structures ($REF_FILE_DATA_HREF, @REF_LITERALS_FALSE)  
+- Options hash (%opt) for flags like -D (debug), -N (normalize)
+- Other state variables ($RELAX_o_EXCLUDE, etc.)
+
+=head1 SEE ALSO
+
+L<Pipe::Core>, L<Pipe::Text>, L<Pipe::Math>
+
+=cut
+
 # Note: This module accesses global variables from the main:: package
 
 our @EXPORT_OK = qw(
