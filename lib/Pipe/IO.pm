@@ -498,6 +498,7 @@ Functions for formatting and outputting data:
 
 Functions for input processing:
 - is_printable_range() - Check if line is in output range
+- process_custom_delimiter() - Convert custom delimiters to pipe format
 
 =head2 :processing
 
@@ -528,6 +529,15 @@ Prints summary statistics to STDERR in the appropriate format.
 
 Checks if a given line number falls within the printable range specified in the context.
 Returns 1 if the line should be printed, 0 otherwise.
+
+=head2 process_custom_delimiter($line, $custom_delimiter)
+
+Processes custom delimiter conversion for the -W flag. Converts custom delimiters 
+to internal pipe format while preserving quoted text sections. Handles complex 
+delimiter patterns including whitespace patterns and protects quoted strings 
+from delimiter splitting.
+
+Returns a two-element list: ($processed_line, \@columns_array).
 
 =head2 build_encoding_table()
 

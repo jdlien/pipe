@@ -622,4 +622,155 @@ subtest 'Additional branch coverage improvements' => sub {
     unlike($stderr, qr/BEGIN=/, 'No debug output when D option is false');
 };
 
+# Test process_custom_delimiter function
+subtest 'process_custom_delimiter function tests' => sub {
+    # Test with no custom delimiter
+    my ($line, $cols_ref) = Pipe::IO::process_custom_delimiter('col1|col2|col3', undef);
+    is($line, 'col1|col2|col3', 'No delimiter processing when undef');
+    is_deeply($cols_ref, ['col1', 'col2', 'col3'], 'Columns split correctly with no custom delimiter');
+    
+    # Test with empty delimiter
+    ($line, $cols_ref) = Pipe::IO::process_custom_delimiter('col1|col2|col3', '');
+    is($line, 'col1|col2|col3', 'No delimiter processing when empty string');
+    
+    # Test with comma delimiter
+    ($line, $cols_ref) = Pipe::IO::process_custom_delimiter('col1,col2,col3', ',');
+    is($line, 'col1|col2|col3', 'Comma delimiter converted to pipes');
+    is_deeply($cols_ref, ['col1', 'col2', 'col3'], 'Columns split correctly with comma delimiter');
+    
+    # Test with tab delimiter
+    ($line, $cols_ref) = Pipe::IO::process_custom_delimiter("col1\tcol2\tcol3", '\t');
+    is($line, 'col1|col2|col3', 'Tab delimiter converted to pipes');
+    is_deeply($cols_ref, ['col1', 'col2', 'col3'], 'Columns split correctly with tab delimiter');
+    
+    # Test with quoted text preservation
+    ($line, $cols_ref) = Pipe::IO::process_custom_delimiter('col1,"col2,with,commas",col3', ',');
+    like($line, qr/col1\|.*\|col3/, 'Quoted text preserved during delimiter conversion');
+    is_deeply($cols_ref, ['col1', '"col2,with,commas"', 'col3'], 'Quoted columns preserved');
+    
+    # Test with whitespace delimiter pattern
+    ($line, $cols_ref) = Pipe::IO::process_custom_delimiter('col1   col2   col3', '\s+');
+    is($line, 'col1|col2|col3', 'Whitespace pattern delimiter converted');
+    is_deeply($cols_ref, ['col1', 'col2', 'col3'], 'Columns split correctly with whitespace pattern');
+    
+    # Test with existing pipes in data
+    ($line, $cols_ref) = Pipe::IO::process_custom_delimiter('col1|pipe,col2,col3', ',');
+    is_deeply($cols_ref, ['col1|pipe', 'col2', 'col3'], 'Existing pipes preserved in columns');
+};
+
+# Test uncovered table formats
+subtest 'additional table format coverage' => sub {
+    # Test MD format
+    local $main::TABLE_OUTPUT = 'MD';
+    local $main::TABLE_ATTR = 'Header1,Header2';
+    
+    my $output = '';
+    {
+        local *STDOUT;
+        open STDOUT, '>', \$output or die "Can't redirect STDOUT";
+        Pipe::IO::table_output('HEAD');
+    }
+    
+    like($output, qr/\*\*Header1\*\*/, 'MD format includes bold headers');
+    like($output, qr/---:/, 'MD format includes alignment markers');
+    
+    # Test CSV_UTF-8 format
+    $main::TABLE_OUTPUT = 'CSV_UTF-8';
+    $main::TABLE_ATTR = 'Name,Value';
+    
+    $output = '';
+    {
+        local *STDOUT;
+        open STDOUT, '>', \$output or die "Can't redirect STDOUT";
+        Pipe::IO::table_output('HEAD');
+    }
+    
+    like($output, qr/Name/, 'CSV_UTF-8 format includes headers');
+    
+    # Note: Unsupported table format test causes exit(), so we skip it
+    # The error path is documented for coverage purposes
+};
+
+# Test CSV format with special characters and numbers
+subtest 'CSV format detailed testing' => sub {
+    local $main::TABLE_OUTPUT = 'CSV';
+    
+    # Test with comma in data
+    my @columns = ('value1', 'val,ue2', 'value3');
+    Pipe::IO::prepare_table_data(\@columns);
+    
+    my $result = join('', @columns);
+    like($result, qr/"val,ue2"/, 'CSV format quotes values with commas');
+    
+    # Test with quotes in data (current behavior - quotes values but doesn't escape internal quotes)
+    @columns = ('value1', 'val"ue2', 'value3');
+    Pipe::IO::prepare_table_data(\@columns);
+    
+    $result = join('', @columns);
+    like($result, qr/"val"ue2"/, 'CSV format quotes values with quotes');
+    
+    # Test with numeric values
+    @columns = ('text', '123.45', 'more text');
+    Pipe::IO::prepare_table_data(\@columns);
+    
+    $result = join('', @columns);
+    like($result, qr/123\.45/, 'CSV format handles numeric values');
+    
+    # Test CSV_UTF-8 with special characters
+    $main::TABLE_OUTPUT = 'CSV_UTF-8';
+    @columns = ('value1', 'val,ue2', 'value3');
+    Pipe::IO::prepare_table_data(\@columns);
+    
+    $result = join('', @columns);
+    like($result, qr/"val,ue2"/, 'CSV_UTF-8 format quotes values with commas');
+};
+
+# Test URL encoding functions
+subtest 'URL encoding function tests' => sub {
+    # Test build_encoding_table
+    Pipe::IO::build_encoding_table();
+    
+    # Test map_url_characters with various inputs
+    my $encoded = Pipe::IO::map_url_characters('hello world');
+    like($encoded, qr/hello%20world/, 'Space encoded as %20');
+    
+    $encoded = Pipe::IO::map_url_characters('test@example.com');
+    like($encoded, qr/%40/, 'At symbol encoded');
+    
+    $encoded = Pipe::IO::map_url_characters('simple');
+    is($encoded, 'simple', 'Simple text not encoded');
+    
+    # Test with empty string
+    $encoded = Pipe::IO::map_url_characters('');
+    is($encoded, '', 'Empty string handled correctly');
+    
+    # Test with special characters
+    $encoded = Pipe::IO::map_url_characters('test!@#$%^&*()');
+    like($encoded, qr/%/, 'Special characters are percent-encoded');
+    unlike($encoded, qr/[!@#\^&*()]/, 'Special characters (except % which is encoded as %25) are encoded');
+};
+
+# Test is_printable_range edge cases  
+subtest 'is_printable_range edge cases' => sub {
+    my $ctx = Pipe::Context->new();
+    
+    # Test with negative ranges
+    $ctx->{line_ranges} = {'-1' => 5};
+    my $result = Pipe::IO::is_printable_range(3, $ctx);
+    is($result, 1, 'Negative range returns true for buffering');
+    
+    # Test with empty ranges
+    $ctx->{line_ranges} = {};
+    $result = Pipe::IO::is_printable_range(1, $ctx);
+    is($result, 0, 'Empty ranges return false');
+    
+    # Test exact boundary conditions
+    $ctx->{line_ranges} = {'1' => 5, '10' => 15};
+    is(Pipe::IO::is_printable_range(1, $ctx), 1, 'Start boundary included');
+    is(Pipe::IO::is_printable_range(5, $ctx), 1, 'End boundary included');
+    is(Pipe::IO::is_printable_range(6, $ctx), 0, 'Between ranges excluded');
+    is(Pipe::IO::is_printable_range(10, $ctx), 1, 'Second range start included');
+    is(Pipe::IO::is_printable_range(16, $ctx), 0, 'Beyond ranges excluded');
+};
+
 done_testing();
