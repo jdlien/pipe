@@ -37,12 +37,12 @@ BASIC_RESULT=$?
 cat basic-tests.out | tee -a "$LOG_FILE"
 echo "" | tee -a "$LOG_FILE"
 
-# Check for existing test-*.sh scripts
+# Check for existing test-*.sh scripts (excluding special ones)
 echo "Checking for generated test scripts..." | tee -a "$LOG_FILE"
-TEST_SCRIPTS=$(ls test-*.sh 2>/dev/null | grep -v "run-\|performance-")
+TEST_SCRIPTS=$(ls test-*.sh 2>/dev/null | grep -v "run-\|performance-\|uncovered-branches")
 
 if [ -z "$TEST_SCRIPTS" ]; then
-    echo -e "${YELLOW}No test-*.sh scripts found.${NC}" | tee -a "$LOG_FILE"
+    echo -e "${YELLOW}No generated test-*.sh scripts found.${NC}" | tee -a "$LOG_FILE"
     echo "Note: To generate tests from Readme.md, use:" | tee -a "$LOG_FILE"
     echo "  make clean && make build" | tee -a "$LOG_FILE"
     echo "" | tee -a "$LOG_FILE"
@@ -54,7 +54,7 @@ if [ -z "$TEST_SCRIPTS" ]; then
         echo "You can generate test scripts manually with gen_test.sh" | tee -a "$LOG_FILE"
     fi
 else
-    echo "Found $(echo "$TEST_SCRIPTS" | wc -w) test scripts" | tee -a "$LOG_FILE"
+    echo "Found $(echo "$TEST_SCRIPTS" | wc -w) generated test scripts" | tee -a "$LOG_FILE"
     echo "" | tee -a "$LOG_FILE"
     
     # Run each test script
@@ -70,6 +70,21 @@ else
         fi
         TOTAL=$((TOTAL + 1))
     done
+fi
+
+# Run uncovered branches tests if available
+if [ -f "test-uncovered-branches.sh" ]; then
+    echo "" | tee -a "$LOG_FILE"
+    echo "Running uncovered branches tests..." | tee -a "$LOG_FILE"
+    ./test-uncovered-branches.sh >> "$LOG_FILE" 2>&1
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}PASS${NC}: test-uncovered-branches.sh" | tee -a "$LOG_FILE"
+        PASS=$((PASS + 1))
+    else
+        echo -e "${RED}FAIL${NC}: test-uncovered-branches.sh" | tee -a "$LOG_FILE"
+        FAIL=$((FAIL + 1))
+    fi
+    TOTAL=$((TOTAL + 1))
 fi
 
 # Create a simple spec-based test for common flags
