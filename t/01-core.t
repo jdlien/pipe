@@ -101,6 +101,10 @@ subtest 'get_number_format comprehensive tests' => sub {
     is(Pipe::Core::get_number_format(undef, 1), '', 'Undef in integer-only mode returns empty');
     is(Pipe::Core::get_number_format('000', 1), '0', 'Zero string in integer-only mode (evaluates to 0)');
     
+    # Test missing condition branch: input is true but doesn't match regex when number_type is true
+    is(Pipe::Core::get_number_format('abc', 1), '', 'Non-numeric in integer-only mode returns empty');
+    is(Pipe::Core::get_number_format('12.34', 1), '', 'Decimal in integer-only mode returns empty');
+    
     # Float formatting with precision
     is(Pipe::Core::get_number_format('123.45', 0, 2), '123.45', 'Float formatting with precision');
     is(Pipe::Core::get_number_format('123.456', 0, 1), '123.5', 'Float formatting with 1 decimal');
@@ -110,14 +114,27 @@ subtest 'get_number_format comprehensive tests' => sub {
     # Test various float patterns that should match the regex
     is(Pipe::Core::get_number_format('123.', 0, 2), '123.00', 'Number ending with decimal point');
     is(Pipe::Core::get_number_format('123', 0, 2), '123', 'Integer with precision (doesn\'t match precision regex)');
-    is(Pipe::Core::get_number_format('.456', 0, 2), 'NaN', 'Number starting with decimal point (doesn\'t match regex)');
+    is(Pipe::Core::get_number_format('.456', 0, 2), '0.46', 'Number starting with decimal point with precision');
     is(Pipe::Core::get_number_format('-0.5', 0, 1), '-0.5', 'Negative fraction');
     
-    # Test scientific notation (may not match the regex as expected)
-    is(Pipe::Core::get_number_format('1.23E+10'), 'NaN', 'Scientific notation positive exponent (doesn\'t match regex)');
-    is(Pipe::Core::get_number_format('1.23e-5'), 'NaN', 'Scientific notation negative exponent (doesn\'t match regex)');
-    is(Pipe::Core::get_number_format('-1.23E+10'), 'NaN', 'Negative scientific notation (doesn\'t match regex)');
-    is(Pipe::Core::get_number_format('1E10'), 'NaN', 'Scientific notation without decimal (doesn\'t match regex)');
+    # Test scientific notation - NOW FIXED!
+    # The regex now correctly uses | instead of & in the lookahead
+    is(Pipe::Core::get_number_format('1.23E+10'), '1.23E+10', 'Scientific notation positive exponent');
+    is(Pipe::Core::get_number_format('1.23e-5'), '1.23e-5', 'Scientific notation negative exponent');
+    is(Pipe::Core::get_number_format('-1.23E+10'), '-1.23E+10', 'Negative scientific notation');
+    is(Pipe::Core::get_number_format('1E10'), '1E10', 'Scientific notation without decimal');
+    is(Pipe::Core::get_number_format('+3.14E-2'), '+3.14E-2', 'Positive scientific notation');
+    is(Pipe::Core::get_number_format('.5E3'), '.5E3', 'Scientific notation starting with decimal');
+    is(Pipe::Core::get_number_format('42e0'), '42e0', 'Scientific notation with zero exponent');
+    
+    # Test edge case that triggers the second part of the OR condition on line 122
+    # Now test patterns that match the fixed regex
+    is(Pipe::Core::get_number_format('.456', 0, 2), '0.46', 'Number starting with decimal with precision');
+    is(Pipe::Core::get_number_format('-.789', 0, 1), '-0.8', 'Negative number starting with decimal');
+    
+    # Test invalid patterns with precision
+    is(Pipe::Core::get_number_format('invalid', 0, 2), 'NaN', 'Invalid input with precision returns NaN');
+    is(Pipe::Core::get_number_format('123.45', 0, undef), '123', 'Float without defined precision falls through to integer');
     
     # Test invalid inputs that should return NaN
     is(Pipe::Core::get_number_format('abc'), 'NaN', 'Non-numeric returns NaN');
@@ -128,7 +145,7 @@ subtest 'get_number_format comprehensive tests' => sub {
     
     # Test edge cases with no arguments
     is(Pipe::Core::get_number_format('123', undef), '123', 'With explicit undef number_type');
-    is(Pipe::Core::get_number_format('123.45', 0), 'NaN', 'Without precision argument (no precision defined)');
+    is(Pipe::Core::get_number_format('123.45', 0), '123', 'Without precision argument falls through to integer');
     
     # Test the case where precision is defined but input doesn't match first regex  
     is(Pipe::Core::get_number_format('1.5', 0, 1), '1.5', 'Simple decimal with precision');
