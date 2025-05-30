@@ -269,8 +269,8 @@ foreach my $test (@pipe_tests) {
 # Generate coverage reports
 print "\nGenerating coverage reports...\n" unless $opts{'q'};
 
-# Generate HTML report for human viewing
-my $cover_cmd = "carton exec -- cover -report html_minimal";
+# Generate standard HTML report (preferred formatting)
+my $cover_cmd = "carton exec -- cover -report html";
 my $cover_output = `$cover_cmd 2>&1`;
 my $cover_exit = $? >> 8;
 
@@ -278,6 +278,18 @@ if ($cover_exit != 0) {
     print STDERR "Coverage report generation failed:\n";
     print STDERR $cover_output;
     exit $cover_exit;
+}
+
+# Generate text report for uncoverable annotations (shows uncoverable points correctly)
+my $text_cmd = "carton exec -- cover -report text";
+my $text_output = `$text_cmd 2>&1`;
+my $text_exit = $? >> 8;
+
+if ($text_exit != 0) {
+    print "\nNote: Text coverage report failed.\n" unless $opts{'q'};
+    print STDERR $text_output unless $opts{'q'};
+} else {
+    print "Text report generated successfully\n" unless $opts{'q'};
 }
 
 # Generate JSON detailed report for AI analysis
@@ -312,10 +324,15 @@ if (-f "cover_db/coverage.html") {
     close $fh;
 
     print "\nCoverage reports generated:\n";
-    print "  HTML: cover_db/coverage.html (open with: open cover_db/coverage.html)\n";
+    print "  HTML: cover_db/coverage.html (standard format for human viewing)\n";
+    if ($text_exit == 0) {
+        print "  Text: Report shown above (displays uncoverable annotations correctly)\n";
+    }
     if ($json_exit == 0) {
         print "  JSON: cover_db/cover_detailed.json (for AI analysis)\n";
     }
+    print "\nTo view HTML report: open cover_db/coverage.html\n";
+    print "To view uncoverable annotations: carton exec -- cover -report text 2>/dev/null | grep '# uncoverable'\n";
 } else {
     print "Coverage report file not found.\n";
 }
