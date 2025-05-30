@@ -13,6 +13,9 @@ spec-*
 test-*
 data/
 
+# macOS Files
+.DS_Store
+
 # Backup files
 *.bak
 *.backup

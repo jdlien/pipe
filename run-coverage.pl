@@ -37,7 +37,6 @@ if (-d "cover_db") {
 print "Running tests with code coverage...\n" unless $opts{'q'};
 
 # Run tests with coverage using carton
-# Run each test file directly with coverage to ensure proper collection
 print "Running unit tests with coverage...\n" unless $opts{'q'};
 
 my $total_output = '';
@@ -48,13 +47,17 @@ opendir(my $dh, 't/') or die "Can't open t/ directory: $!";
 my @test_files = sort grep { /\.t$/ } readdir($dh);
 closedir($dh);
 
-# Run each test file with coverage
+# Run each test file with coverage using the standard approach
 foreach my $test_file (@test_files) {
-    my $cmd = "carton exec -- perl -MDevel::Cover=-db,cover_db,+select,^lib/Pipe/,+ignore,t/ -Ilib t/$test_file";
+    my $cmd = 'carton exec -- perl '
+        . '-MDevel::Cover=-db,cover_db,'
+        . '-select,^lib/Pipe/,^pipe\.pl,'
+        . '+ignore,^local/lib/perl5/,+ignore,t/ '
+        . '-Ilib t/' . $test_file;
     print "  Running $test_file...\n" unless $opts{'q'};
     my $output = `$cmd 2>&1`;
     my $exit_code = $? >> 8;
-    
+
     if ($exit_code != 0) {
         $failed++;
         print STDERR "Test $test_file failed:\n$output\n";
@@ -72,6 +75,43 @@ if ($exit_code != 0) {
 }
 
 print $output unless $opts{'q'};
+
+# Run integration tests to capture pipe.pl script coverage
+print "\nRunning pipe.pl script coverage tests...\n" unless $opts{'q'};
+
+# Create simple tests that run pipe.pl through carton to capture script coverage
+my @pipe_tests = (
+    ['echo "a|b|c" | carton exec -- perl '
+    . '-MDevel::Cover=-db,cover_db,'
+    . '-select,^lib/Pipe/,^pipe\.pl,'
+    . '+ignore,^local/lib/perl5/,+ignore,t/ '
+    . './pipe.pl', 'Basic execution'],
+
+    ['echo "a|b|c" | carton exec -- perl '
+    . '-MDevel::Cover=-db,cover_db,'
+    . '-select,^lib/Pipe/,^pipe\.pl,'
+    . '+ignore,^local/lib/perl5/,+ignore,t/ '
+    . './pipe.pl -oc2,c0', 'Column ordering'],
+
+    ['echo "  a  |  b  " | carton exec -- perl '
+    . '-MDevel::Cover=-db,cover_db,'
+    . '-select,^lib/Pipe/,^pipe\.pl,'
+    . '+ignore,^local/lib/perl5/,+ignore,t/ '
+    . './pipe.pl -tany', 'Trim operation'],
+
+    ['carton exec -- perl '
+    . '-MDevel::Cover=-db,cover_db,'
+    . '-select,^lib/Pipe/,^pipe\.pl,'
+    . '+ignore,^local/lib/perl5/,+ignore,t/ '
+    . './pipe.pl -x', 'Usage display'],
+);
+
+foreach my $test (@pipe_tests) {
+    my ($cmd, $desc) = @$test;
+    print "  Running: $desc...\n" unless $opts{'q'};
+    my $test_output = `$cmd 2>/dev/null`;
+    # We don't care about the exit code, just that coverage was collected
+}
 
 # Generate coverage reports
 print "\nGenerating coverage reports...\n" unless $opts{'q'};
@@ -108,16 +148,16 @@ if (-f "cover_db/coverage.html") {
         open my $fh, '<', 'cover_db/coverage.html';
         <$fh>;
     };
-    
-    # Filter to only include lib/Pipe/ and pipe.pl entries
-    $html_content =~ s/<tr><td[^>]*><a[^>]*>(?!(?:lib\/Pipe\/|pipe\.pl))[^<]*<\/a>.*?<\/tr>\n//gs;
-    $html_content =~ s/<tr><td[^>]*>(?!(?:lib\/Pipe\/|pipe\.pl|Total))[^<]*<\/td>.*?<\/tr>\n//gs;
-    
+
+    # Uncomment to filter to only include lib/Pipe/ and pipe.pl entries
+    # $html_content =~ s/<tr><td[^>]*><a[^>]*>(?!(?:lib\/Pipe\/|pipe\.pl))[^<]*<\/a>.*?<\/tr>\n//gs;
+    # $html_content =~ s/<tr><td[^>]*>(?!(?:lib\/Pipe\/|pipe\.pl|Total))[^<]*<\/td>.*?<\/tr>\n//gs;
+
     # Write the filtered HTML back
     open my $fh, '>', 'cover_db/coverage.html';
     print $fh $html_content;
     close $fh;
-    
+
     print "\nCoverage reports generated:\n";
     print "  HTML: cover_db/coverage.html (open with: open cover_db/coverage.html)\n";
     if ($json_exit == 0) {

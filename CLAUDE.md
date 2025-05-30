@@ -55,16 +55,19 @@ pipe/
 **Status**: ✅ Comprehensive test suite with 100% pass rate (170+ tests total)
 
 #### Test Structure
+
 - **Perl unit tests**: `t/` directory - 155+ Test::More tests for all 9 modules
-- **Shell integration**: `tests/` directory - 15 core functionality tests  
+- **Shell integration**: `tests/` directory - 15 core functionality tests
 - **Extended tests**: `tests/run-extended-tests.sh` - 59 tests from Readme examples
 
 #### Key Commands
+
 - `./run-tests.pl -a` - All tests (AI-friendly, single process)
 - `./run-coverage.pl` - Code coverage analysis (requires carton)
 - `carton exec -- perlcritic lib/` - Static code analysis
 
 #### Development Dependencies (NEW)
+
 - **Setup**: `brew install carton && carton install`
 - **Zero production deps**: All dev tools in `local/` (git-ignored)
 - **Tools**: Devel::Cover, Perl::Critic, Test::Pod, Perl::Tidy
@@ -72,15 +75,21 @@ pipe/
 #### Test Coverage Best Practices
 
 ##### Analyzing Coverage
-1. **Run coverage**: `./run-coverage.pl -q` generates HTML reports in `cover_db/`
-2. **View results**: `open cover_db/coverage.html` for overview
-3. **Check specific files**: `cover_db/lib-Pipe-ModuleName-pm.html` shows line-by-line coverage
-4. **Coverage types**:
-   - **Green (c3)**: Covered code
-   - **Red (c0)**: Uncovered code
-   - **Yellow (c1/c2)**: Partial coverage
+
+1. **Run coverage**: `./run-coverage.pl -q` generates HTML and JSON reports
+2. **View results (human)**: `open cover_db/coverage.html` for human operator to review, but to NOT parse this yourself as you should use the JSON file for programmatic analysis.
+3. **Analyze with AI**: Use JSON reports in `cover_db/cover_detailed.json` for programmatic analysis
+
+##### JSON Coverage Analysis (for AI)
+
+- **Setup**: Run `carton install` to install `Devel::Cover::Report::Json_detailed` and `JSON::MaybeXS` dependencies
+- **JSON location**: `cover_db/cover_detailed.json` - comprehensive coverage data in JSON format
+- **Structure**: Contains `branches`, `statements`, `subs` sections with detailed line-by-line data
+- **Usage**: Read JSON file to programmatically identify uncovered lines, branches, and conditions
+- **AI workflow**: Parse JSON to find specific uncovered code paths for targeted test writing
 
 ##### Finding Missing Coverage
+
 1. **Branch coverage**: Check `lib-Pipe-ModuleName-pm--branch.html` for untested conditions
 2. **Condition coverage**: Check `lib-Pipe-ModuleName-pm--condition.html` for complex boolean logic
 3. **Common gaps**:
@@ -89,6 +98,7 @@ pipe/
    - Regex patterns that never match (check for typos like `&` vs `|`)
 
 ##### Writing Comprehensive Tests
+
 1. **Test all branches**: Ensure both true/false paths are tested
 2. **Test edge cases**: Empty strings, undef, zero, negative numbers
 3. **Test error conditions**: Invalid inputs, missing parameters
@@ -96,6 +106,7 @@ pipe/
 5. **Coverage goals**: Aim for 90%+ but focus on meaningful coverage
 
 ##### Coverage Pitfalls
+
 - **Low coverage numbers**: Check if coverage script is collecting data properly
 - **Unreachable code**: Look for regex bugs or impossible conditions
 - **Constants/declarations**: Don't need coverage, but Perl counts them
@@ -187,6 +198,6 @@ pipe/
 
 ```bash
 ./run-tests.pl -a        # All tests (AI-friendly)
-./run-coverage.pl        # Code coverage  
+./run-coverage.pl        # Code coverage
 carton exec -- perlcritic lib/  # Linting
 ```
