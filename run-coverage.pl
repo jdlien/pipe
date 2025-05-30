@@ -67,16 +67,16 @@ my $output = $total_output;
 my $exit_code = $failed;
 
 if ($exit_code != 0) {
-    print STDERR "Tests failed with coverage enabled:\n";
-    print STDERR $output;
-    exit $exit_code;
+    print STDERR "Some tests failed but continuing to generate coverage report:\n" unless $opts{'q'};
+    print STDERR $output unless $opts{'q'};
 }
 
 print $output unless $opts{'q'};
 
-# Generate coverage report filtered to our modules only
-print "\nGenerating coverage report...\n" unless $opts{'q'};
-# Generate full report then filter HTML - this ensures we get all module data
+# Generate coverage reports
+print "\nGenerating coverage reports...\n" unless $opts{'q'};
+
+# Generate HTML report for human viewing
 my $cover_cmd = "carton exec -- cover -report html_minimal";
 my $cover_output = `$cover_cmd 2>&1`;
 my $cover_exit = $? >> 8;
@@ -85,6 +85,18 @@ if ($cover_exit != 0) {
     print STDERR "Coverage report generation failed:\n";
     print STDERR $cover_output;
     exit $cover_exit;
+}
+
+# Generate JSON detailed report for AI analysis
+my $json_cmd = "carton exec -- cover -report json_detailed";
+my $json_output = `$json_cmd 2>&1`;
+my $json_exit = $? >> 8;
+
+if ($json_exit != 0) {
+    print "\nNote: JSON detailed coverage report failed. Run 'carton install' to install dependencies.\n" unless $opts{'q'};
+    print STDERR $json_output unless $opts{'q'};
+} else {
+    print "JSON detailed report generated successfully\n" unless $opts{'q'};
 }
 
 print $cover_output unless $opts{'q'};
@@ -106,8 +118,11 @@ if (-f "cover_db/coverage.html") {
     print $fh $html_content;
     close $fh;
     
-    print "\nCoverage report generated: cover_db/coverage.html\n";
-    print "Open with: open cover_db/coverage.html\n";
+    print "\nCoverage reports generated:\n";
+    print "  HTML: cover_db/coverage.html (open with: open cover_db/coverage.html)\n";
+    if ($json_exit == 0) {
+        print "  JSON: cover_db/cover_detailed.json (for AI analysis)\n";
+    }
 } else {
     print "Coverage report file not found.\n";
 }

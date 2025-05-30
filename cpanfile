@@ -5,6 +5,8 @@
 on 'develop' => sub {
     requires 'Test::More', '1.302183';  # Core testing framework
     requires 'Devel::Cover', '1.40';    # Code coverage analysis
+    requires 'Devel::Cover::Report::Json_detailed'; # JSON coverage reports for AI
+    requires 'JSON::MaybeXS';       # Required for JSON coverage reports
     requires 'Test::Pod', '1.52';       # POD syntax testing
     requires 'Test::Pod::Coverage', '1.10'; # POD coverage testing
     requires 'Perl::Critic', '1.140';   # Static code analysis/linting
