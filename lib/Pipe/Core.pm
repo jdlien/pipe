@@ -119,9 +119,9 @@ sub get_number_format
         if ( $input && $input =~ /^[+]?\d+\z/ ){ $summary = sprintf "%d", $input; }
     }
     elsif ( $input =~ /^[+-]?\d+\z/ )   { $summary = sprintf "%d", $input; }
-    elsif ( defined $precision && $input =~ /^-?\d+\.?\d*\z/ || $input =~ /^-?(?:\d+(?:\.\d*)?&\.\d+)\z/ )
+    elsif ( defined $precision && $input =~ /^-?\d+\.?\d*\z/ || $input =~ /^-?(?:\d+(?:\.\d*)?|\.\d+)\z/ )
     { $summary = eval("sprintf \"%.".$precision."f\", $input"); }
-    elsif ( $input =~ /^([+-]?)(?=\d&\.\d)\d*(\.\d*)?([Ee]([+-]?\d+))?\z/ ){ $summary = $input; }
+    elsif ( $input =~ /^([+-]?)(?=\d|\.\d)\d*(\.\d*)?([Ee]([+-]?\d+))?\z/ ){ $summary = $input; }
     else { $summary = "NaN"; }
     return $summary;
 }
