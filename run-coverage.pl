@@ -79,31 +79,112 @@ print $output unless $opts{'q'};
 # Run integration tests to capture pipe.pl script coverage
 print "\nRunning pipe.pl script coverage tests...\n" unless $opts{'q'};
 
-# Create simple tests that run pipe.pl through carton to capture script coverage
+# Create comprehensive tests that run pipe.pl through carton to capture script coverage
+my $cover_args = '-MDevel::Cover=-db,cover_db,'
+    . '-select,^lib/Pipe/,^pipe\.pl,'
+    . '+ignore,^local/lib/perl5/,+ignore,t/ ';
+
 my @pipe_tests = (
-    ['echo "a|b|c" | carton exec -- perl '
-    . '-MDevel::Cover=-db,cover_db,'
-    . '-select,^lib/Pipe/,^pipe\.pl,'
-    . '+ignore,^local/lib/perl5/,+ignore,t/ '
-    . './pipe.pl', 'Basic execution'],
-
-    ['echo "a|b|c" | carton exec -- perl '
-    . '-MDevel::Cover=-db,cover_db,'
-    . '-select,^lib/Pipe/,^pipe\.pl,'
-    . '+ignore,^local/lib/perl5/,+ignore,t/ '
-    . './pipe.pl -oc2,c0', 'Column ordering'],
-
-    ['echo "  a  |  b  " | carton exec -- perl '
-    . '-MDevel::Cover=-db,cover_db,'
-    . '-select,^lib/Pipe/,^pipe\.pl,'
-    . '+ignore,^local/lib/perl5/,+ignore,t/ '
-    . './pipe.pl -tany', 'Trim operation'],
-
-    ['carton exec -- perl '
-    . '-MDevel::Cover=-db,cover_db,'
-    . '-select,^lib/Pipe/,^pipe\.pl,'
-    . '+ignore,^local/lib/perl5/,+ignore,t/ '
-    . './pipe.pl -x', 'Usage display'],
+    # Basic functionality
+    ['echo "a|b|c" | carton exec -- perl ' . $cover_args . './pipe.pl', 'Basic execution'],
+    ['carton exec -- perl ' . $cover_args . './pipe.pl -x', 'Usage display'],
+    ['carton exec -- perl ' . $cover_args . './pipe.pl -D < /dev/null', 'Debug flag'],
+    
+    # Column operations
+    ['echo "a|b|c" | carton exec -- perl ' . $cover_args . './pipe.pl -oc2,c0', 'Column ordering'],
+    ['echo "a|b|c" | carton exec -- perl ' . $cover_args . './pipe.pl -oc0', 'Single column'],
+    ['echo "hello|world" | carton exec -- perl ' . $cover_args . './pipe.pl -uc0', 'Uppercase column'],
+    ['echo "HELLO|WORLD" | carton exec -- perl ' . $cover_args . './pipe.pl -lc0', 'Lowercase column'],
+    
+    # Text operations
+    ['echo "  a  |  b  " | carton exec -- perl ' . $cover_args . './pipe.pl -tany', 'Trim operation'],
+    ['echo "  hello  |  world  " | carton exec -- perl ' . $cover_args . './pipe.pl -nc0', 'Normalize column'],
+    
+    # Math operations
+    ['echo -e "1|2\n3|4" | carton exec -- perl ' . $cover_args . './pipe.pl -ac0', 'Sum operation'],
+    ['echo -e "a|b\nc|d" | carton exec -- perl ' . $cover_args . './pipe.pl -cc0', 'Count operation'],
+    ['echo -e "1|2\n3|4\n5|6" | carton exec -- perl ' . $cover_args . './pipe.pl -vc0', 'Average operation'],
+    ['echo -e "1|2\n3|4" | carton exec -- perl ' . $cover_args . './pipe.pl -1c0', 'Increment operation'],
+    
+    # Pattern matching
+    ['echo -e "a|1\nb|2\na|3" | carton exec -- perl ' . $cover_args . './pipe.pl -gc0:a', 'Grep operation'],
+    ['echo -e "a|1\nb|2\na|3" | carton exec -- perl ' . $cover_args . './pipe.pl -Gc0:b', 'Not grep operation'],
+    ['echo -e "abc|def\nxyz|uvw" | carton exec -- perl ' . $cover_args . './pipe.pl -Xc0:^a', 'Match start'],
+    
+    # Data operations
+    ['echo -e "b|2\na|1\nc|3" | carton exec -- perl ' . $cover_args . './pipe.pl -s', 'Sort operation'],
+    ['echo -e "a|1\na|1\nb|2" | carton exec -- perl ' . $cover_args . './pipe.pl -d', 'Dedup operation'],
+    ['echo -e "header|info\ndata|value" | carton exec -- perl ' . $cover_args . './pipe.pl -H1', 'Header skip'],
+    ['echo -e "line1|a\nline2|b\nline3|c" | carton exec -- perl ' . $cover_args . './pipe.pl -T1', 'Tail operation'],
+    
+    # More comprehensive flag testing
+    ['echo -e "1|2\n3|4" | carton exec -- perl ' . $cover_args . './pipe.pl -2c0:5', 'Auto increment'],
+    ['echo -e "1|2\n3|4" | carton exec -- perl ' . $cover_args . './pipe.pl -3c0:2', 'Qualified increment'],
+    ['echo -e "1|2\n3|4\n5|6" | carton exec -- perl ' . $cover_args . './pipe.pl -4c0', 'Delta operation'],
+    ['echo -e "a|b\nc|d" | carton exec -- perl ' . $cover_args . './pipe.pl -5', 'Line count'],
+    ['echo -e "a|1\nb|2\na|3" | carton exec -- perl ' . $cover_args . './pipe.pl -6c0', 'Histogram'],
+    ['echo -e "a|b\nc|d" | carton exec -- perl ' . $cover_args . './pipe.pl -7', 'Match limit'],
+    ['echo -e "a|b\nc|d" | carton exec -- perl ' . $cover_args . './pipe.pl -8', 'Flag 8'],
+    
+    # Advanced operations
+    ['echo -e "1.5|2.7\n3.2|4.1" | carton exec -- perl ' . $cover_args . './pipe.pl -Ac0', 'Average after processing'],
+    ['echo -e "aa|bb\nab|cd" | carton exec -- perl ' . $cover_args . './pipe.pl -bc0', 'Begins with comparison'],
+    ['echo -e "aa|bb\nab|cd" | carton exec -- perl ' . $cover_args . './pipe.pl -Bc0', 'Not begins with comparison'],
+    ['echo -e "1|2\n6|7\n3|4" | carton exec -- perl ' . $cover_args . './pipe.pl -Cc0:>5', 'Conditional comparison'],
+    ['echo "HELLO|WORLD" | carton exec -- perl ' . $cover_args . './pipe.pl -ec0:lower', 'Case conversion'],
+    ['echo -e "cat|dog\nrat|pig" | carton exec -- perl ' . $cover_args . './pipe.pl -Ec0:s/a/b/', 'Replace pattern'],
+    ['echo "abc|def" | carton exec -- perl ' . $cover_args . './pipe.pl -fc0', 'Flip operation'],
+    ['echo "123|456" | carton exec -- perl ' . $cover_args . './pipe.pl -Fc0', 'Format operation'],
+    ['echo "a,b,c" | carton exec -- perl ' . $cover_args . './pipe.pl -h,', 'Custom delimiter'],
+    ['echo "a|b|c" | carton exec -- perl ' . $cover_args . './pipe.pl -iany', 'Information flag'],
+    ['echo "a|b|c" | carton exec -- perl ' . $cover_args . './pipe.pl -I', 'Case insensitive'],
+    ['echo -e "a|b\nc|d" | carton exec -- perl ' . $cover_args . './pipe.pl -jc0', 'Join operation'],
+    ['echo -e "a|b\nc|d" | carton exec -- perl ' . $cover_args . './pipe.pl -J', 'Join all'],
+    ['echo "hello|world" | carton exec -- perl ' . $cover_args . './pipe.pl -kc0:\'$value = uc($value);\'', 'Script execution'],
+    ['echo "a|b|c" | carton exec -- perl ' . $cover_args . './pipe.pl -K', 'Keep header'],
+    ['echo "hello|world" | carton exec -- perl ' . $cover_args . './pipe.pl -lc0:a-z:A-Z', 'Translate operation'],
+    ['echo -e "line1|a\nline2|b\nline3|c" | carton exec -- perl ' . $cover_args . './pipe.pl -Lc0:1-2', 'Line range'],
+    ['echo "123456789|data" | carton exec -- perl ' . $cover_args . './pipe.pl -mc0:###-##-####', 'Mask operation'],
+    ['echo -e "a|b\nc|d" | carton exec -- perl ' . $cover_args . './pipe.pl -Mc0', 'Merge flag'],
+    ['echo -e "a|b\nc|d" | carton exec -- perl ' . $cover_args . './pipe.pl -N', 'Normalize flag'],
+    ['echo -e "a|b\nc|d" | carton exec -- perl ' . $cover_args . './pipe.pl -Oc0', 'Merge columns'],
+    ['echo "hello|world" | carton exec -- perl ' . $cover_args . './pipe.pl -pc0:10', 'Pad operation'],
+    ['echo -e "a|b\nc|d" | carton exec -- perl ' . $cover_args . './pipe.pl -P', 'Pad all'],
+    ['echo -e "a|b\nc|d" | carton exec -- perl ' . $cover_args . './pipe.pl -qc0', 'Join count'],
+    ['echo -e "a|b\nc|d" | carton exec -- perl ' . $cover_args . './pipe.pl -Q1000', 'Buffer size'],
+    ['echo -e "a|b\nc|d\ne|f\ng|h" | carton exec -- perl ' . $cover_args . './pipe.pl -r50', 'Random selection'],
+    ['echo -e "a|b\nc|d" | carton exec -- perl ' . $cover_args . './pipe.pl -R', 'Reverse flag'],
+    ['echo -e "cat|dog\nrat|pig" | carton exec -- perl ' . $cover_args . './pipe.pl -Sc0:s/a/b/', 'Substitute pattern'],
+    ['echo "hello|world" | carton exec -- perl ' . $cover_args . './pipe.pl -uc0', 'Uppercase'],
+    ['echo -e "a|b\nc|d" | carton exec -- perl ' . $cover_args . './pipe.pl -U', 'Uppercase all'],
+    ['echo -e "a|b\nc|d" | carton exec -- perl ' . $cover_args . './pipe.pl -V', 'Verbose flag'],
+    ['echo "hello|world" | carton exec -- perl ' . $cover_args . './pipe.pl -wc0', 'Width operation'],
+    ['echo -e "a|b\nc|d" | carton exec -- perl ' . $cover_args . './pipe.pl -W', 'Width all'],
+    ['echo "1.234567|2.345678" | carton exec -- perl ' . $cover_args . './pipe.pl -yc0', 'Precision'],
+    ['echo -e "abc|def\nxyz|uvw" | carton exec -- perl ' . $cover_args . './pipe.pl -Yc0:a', 'Match Y operation'],
+    ['echo -e "a||\nc|d" | carton exec -- perl ' . $cover_args . './pipe.pl -zc0', 'Empty columns'],
+    ['echo -e "a||\nc|d" | carton exec -- perl ' . $cover_args . './pipe.pl -Zc0', 'Show empty columns'],
+    
+    # Error conditions and edge cases
+    ['echo "a|b|c" | carton exec -- perl ' . $cover_args . './pipe.pl -oc999', 'Invalid column index'],
+    ['echo -e "a|b\nc|d" | carton exec -- perl ' . $cover_args . './pipe.pl -H999', 'Large header skip'],
+    ['echo -e "a|b\nc|d" | carton exec -- perl ' . $cover_args . './pipe.pl -T999', 'Large tail count'],
+    ['echo -e "a|b\nc|d" | carton exec -- perl ' . $cover_args . './pipe.pl -Q0', 'Zero buffer size'],
+    ['echo "1.234|5.678" | carton exec -- perl ' . $cover_args . './pipe.pl -y0', 'Zero precision'],
+    ['echo -e "a|b\nc|d" | carton exec -- perl ' . $cover_args . './pipe.pl -r0', 'Zero random percentage'],
+    ['echo -e "a|b\nc|d" | carton exec -- perl ' . $cover_args . './pipe.pl -r100', 'Full random percentage'],
+    
+    # Complex combinations
+    ['echo "hello|world" | carton exec -- perl ' . $cover_args . './pipe.pl -oc0 -uc0', 'Column order and uppercase'],
+    ['echo -e "apple|fruit\nbanana|fruit" | carton exec -- perl ' . $cover_args . './pipe.pl -gc0:a -uc0', 'Grep and uppercase'],
+    ['echo -e "3|b\n1|a\n2|c" | carton exec -- perl ' . $cover_args . './pipe.pl -ac0 -oc1,c0', 'Sum and reorder'],
+    ['echo -e "header|info\ndata|value" | carton exec -- perl ' . $cover_args . './pipe.pl -H1 -oc0', 'Skip header and order'],
+    ['echo "  hello  |  world  " | carton exec -- perl ' . $cover_args . './pipe.pl -tany -uc0', 'Trim and uppercase'],
+    
+    # Debug combinations
+    ['echo "a|b|c" | carton exec -- perl ' . $cover_args . './pipe.pl -D -oc0', 'Debug with column order'],
+    ['echo -e "1|2\n3|4" | carton exec -- perl ' . $cover_args . './pipe.pl -D -ac0', 'Debug with sum'],
+    ['echo "abc|def" | carton exec -- perl ' . $cover_args . './pipe.pl -D -gc0:a', 'Debug with grep'],
 );
 
 foreach my $test (@pipe_tests) {
