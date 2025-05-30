@@ -69,6 +69,37 @@ pipe/
 - **Zero production deps**: All dev tools in `local/` (git-ignored)
 - **Tools**: Devel::Cover, Perl::Critic, Test::Pod, Perl::Tidy
 
+#### Test Coverage Best Practices
+
+##### Analyzing Coverage
+1. **Run coverage**: `./run-coverage.pl -q` generates HTML reports in `cover_db/`
+2. **View results**: `open cover_db/coverage.html` for overview
+3. **Check specific files**: `cover_db/lib-Pipe-ModuleName-pm.html` shows line-by-line coverage
+4. **Coverage types**:
+   - **Green (c3)**: Covered code
+   - **Red (c0)**: Uncovered code
+   - **Yellow (c1/c2)**: Partial coverage
+
+##### Finding Missing Coverage
+1. **Branch coverage**: Check `lib-Pipe-ModuleName-pm--branch.html` for untested conditions
+2. **Condition coverage**: Check `lib-Pipe-ModuleName-pm--condition.html` for complex boolean logic
+3. **Common gaps**:
+   - Error handling paths
+   - Edge cases in conditionals
+   - Regex patterns that never match (check for typos like `&` vs `|`)
+
+##### Writing Comprehensive Tests
+1. **Test all branches**: Ensure both true/false paths are tested
+2. **Test edge cases**: Empty strings, undef, zero, negative numbers
+3. **Test error conditions**: Invalid inputs, missing parameters
+4. **Use subtest blocks**: Group related tests for better organization
+5. **Coverage goals**: Aim for 90%+ but focus on meaningful coverage
+
+##### Coverage Pitfalls
+- **Low coverage numbers**: Check if coverage script is collecting data properly
+- **Unreachable code**: Look for regex bugs or impossible conditions
+- **Constants/declarations**: Don't need coverage, but Perl counts them
+
 ### Perl Conventions
 
 - **Perl version**: Uses `#!/usr/bin/perl -w` with warnings enabled
