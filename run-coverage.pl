@@ -147,6 +147,78 @@ my @pipe_tests = (
     ['echo "123456789|data" | carton exec -- perl ' . $cover_args . './pipe.pl -mc0:###-##-####', 'Mask operation'],
     ['echo -e "a|b\nc|d" | carton exec -- perl ' . $cover_args . './pipe.pl -Mc0', 'Merge flag'],
     ['echo -e "a|b\nc|d" | carton exec -- perl ' . $cover_args . './pipe.pl -N', 'Normalize flag'],
+    
+    # Tests for uncovered areas based on JSON analysis
+    # Usage/help text
+    ['carton exec -- perl ' . $cover_args . './pipe.pl -?', 'Help text (usage)'],
+    
+    # Script execution tests (-X flag) - lines 453-475
+    ['echo "test|data" | carton exec -- perl ' . $cover_args . './pipe.pl -Xc0:\'print "executed\\n"\'', 'Script execution allowed'],
+    ['echo "test|rm file" | carton exec -- perl ' . $cover_args . './pipe.pl -kc1:\'print $value\'', 'Script with dangerous command'],
+    
+    # Line range tests with negative values - lines 500-514
+    ['echo -e "line1\nline2\nline3\nline4\nline5" | carton exec -- perl ' . $cover_args . './pipe.pl -L:-2', 'Negative line range (last 2 lines)'],
+    ['echo -e "a|b\nc|d\ne|f\ng|h" | carton exec -- perl ' . $cover_args . './pipe.pl -L:-3--1', 'Negative line range with range'],
+    
+    # Advanced match operations - lines 530-564
+    ['echo -e "start|data\nmiddle|info\nend|value" | carton exec -- perl ' . $cover_args . './pipe.pl -Wc0:start -gc0:end', 'Match with wait flag'],
+    ['echo -e "a|1\nb|2\nc|3\nd|4" | carton exec -- perl ' . $cover_args . './pipe.pl -Xc0:a -Yc0:c -gc0:b', 'Complex X-Y matching'],
+    ['echo -e "pattern1|data\npattern2|info" | carton exec -- perl ' . $cover_args . './pipe.pl -Xc0:pattern1 -g', 'X match with grep'],
+    
+    # Error conditions and edge cases
+    ['echo "" | carton exec -- perl ' . $cover_args . './pipe.pl -ac0 2>&1', 'Empty input for sum'],
+    ['echo "not_a_number" | carton exec -- perl ' . $cover_args . './pipe.pl -1c0 2>&1', 'Non-numeric increment'],
+    ['echo "data" | carton exec -- perl ' . $cover_args . './pipe.pl -?div:c0,c1 2>&1', 'Division with missing column'],
+    
+    # Debug mode tests
+    ['echo "test|data" | carton exec -- perl ' . $cover_args . './pipe.pl -D -gc0:test 2>&1', 'Debug mode with grep'],
+    ['echo "a|b|c" | carton exec -- perl ' . $cover_args . './pipe.pl -D -oc1,c0,c2 2>&1', 'Debug mode with order'],
+    
+    # Complex flag combinations
+    ['echo -e "1|2\n3|4\n5|6" | carton exec -- perl ' . $cover_args . './pipe.pl -H1 -T1 -s', 'Header + Tail + Sort'],
+    ['echo -e "a|1\nb|2\na|3" | carton exec -- perl ' . $cover_args . './pipe.pl -dc0 -ac1', 'Dedup + Sum combination'],
+    
+    # Additional tests for remaining uncovered areas
+    # -8 flag (line skip pattern)
+    ['echo -e "skip_this\nkeep1\nskip_me\nkeep2" | carton exec -- perl ' . $cover_args . './pipe.pl -8skip', 'Skip lines with pattern'],
+    
+    # -M flag with -0 (merge data from file)
+    ['echo "test1|data1" > /tmp/pipe_test_merge.txt && echo "test2|data2" | carton exec -- perl ' . $cover_args . './pipe.pl -0/tmp/pipe_test_merge.txt -M:', 'Merge with file input'],
+    
+    # -N flag with various conditions
+    ['echo -e "a|b\nc|d" | carton exec -- perl ' . $cover_args . './pipe.pl -N -gc0:a', 'Normalize with grep'],
+    ['echo -e "a|b\nc|d" | carton exec -- perl ' . $cover_args . './pipe.pl -N -i', 'Normalize with info flag'],
+    
+    # -Q flag (post match) combinations
+    ['echo -e "before1\nmatch|data\nafter1\nafter2" | carton exec -- perl ' . $cover_args . './pipe.pl -Q1 -gc0:match', 'Post match with buffer'],
+    ['echo -e "a|1\nb|2\nc|3" | carton exec -- perl ' . $cover_args . './pipe.pl -Q -N', 'Post match with normalize'],
+    
+    # Grep combinations with match modes
+    ['echo -e "start|1\nmiddle|2\nend|3" | carton exec -- perl ' . $cover_args . './pipe.pl -Xc0:start -gc0:middle', 'X match with grep in range'],
+    ['echo -e "a|1\nb|2\nc|3" | carton exec -- perl ' . $cover_args . './pipe.pl -g -G', 'Both grep and not-grep'],
+    
+    # -r flag edge cases
+    ['echo -e "1|2\n3|4\n5|6\n7|8\n9|10" | carton exec -- perl ' . $cover_args . './pipe.pl -r101 2>&1', 'Random sample over 100%'],
+    ['echo -e "1|2\n3|4\n5|6" | carton exec -- perl ' . $cover_args . './pipe.pl -r-5 2>&1', 'Random sample negative'],
+    
+    # -i flag combinations
+    ['echo -e "a|b\nc|d" | carton exec -- perl ' . $cover_args . './pipe.pl -i -bc0', 'Info with begins comparison'],
+    ['echo -e "a|b\nc|d" | carton exec -- perl ' . $cover_args . './pipe.pl -i -Bc0', 'Info with not begins comparison'],
+    ['echo -e "a|b\nc|d" | carton exec -- perl ' . $cover_args . './pipe.pl -i -zc0', 'Info with empty check'],
+    ['echo -e "a|b\nc|d" | carton exec -- perl ' . $cover_args . './pipe.pl -i -Zc0', 'Info with not empty check'],
+    
+    # -f and -F flags (flip/format)
+    ['echo "hello|world" | carton exec -- perl ' . $cover_args . './pipe.pl -fc0', 'Flip column'],
+    ['echo "12345" | carton exec -- perl ' . $cover_args . './pipe.pl -Fc0', 'Format column'],
+    
+    # -6 flag (histogram) with combinations
+    ['echo -e "a|1\nb|2\na|3\nc|4" | carton exec -- perl ' . $cover_args . './pipe.pl -6c0 -v', 'Histogram with average'],
+    
+    # -7 flag (match limit)
+    ['echo -e "a|1\na|2\na|3\na|4" | carton exec -- perl ' . $cover_args . './pipe.pl -7:2 -gc0:a', 'Match limit with grep'],
+    
+    # Line buffer overflow test
+    ['seq 1 150 | carton exec -- perl ' . $cover_args . './pipe.pl -L:-10', 'Line buffer with many lines'],
     ['echo -e "a|b\nc|d" | carton exec -- perl ' . $cover_args . './pipe.pl -Oc0', 'Merge columns'],
     ['echo "hello|world" | carton exec -- perl ' . $cover_args . './pipe.pl -pc0:10', 'Pad operation'],
     ['echo -e "a|b\nc|d" | carton exec -- perl ' . $cover_args . './pipe.pl -P', 'Pad all'],
