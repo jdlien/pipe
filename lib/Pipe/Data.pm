@@ -29,9 +29,58 @@ our %EXPORT_TAGS = (
 our $TRUE = 0;
 our $FALSE = 1;
 
-# Sorts the ALL_LINES array using (O)1 space.
-# param:  list of columns to sort on.
-# return: <none> - reorders the ALL_LINES list.
+=head1 NAME
+
+Pipe::Data - Data processing functions for pipe.pl (sorting, deduplication, randomization)
+
+=head1 SYNOPSIS
+
+    use Pipe::Data qw(:all);
+    
+    # Sort lines by specified columns
+    sort_list(\@sort_columns);
+    
+    # Remove duplicates with optional aggregation
+    dedup_list(\@dedup_columns);
+    
+    # Select random percentage of lines
+    randomize_list();
+    
+    # Merge reference file data
+    push_merge_ref_columns(\@col_indexes, \@line_data, $key_col);
+    
+    # Finalize operations after reading entire input
+    finalize_full_read_functions();
+
+=head1 DESCRIPTION
+
+This module provides data processing functions for the pipe.pl tool, focusing on
+operations that require processing the entire dataset: sorting, deduplication,
+randomization, and reference file merging.
+
+=head1 FUNCTIONS
+
+=cut
+
+=head2 sort_list()
+
+Sorts the @main::ALL_LINES array in-place based on specified columns.
+
+Parameters:
+  $wantedColumns - Array reference containing column indices to sort on
+
+Returns: None (modifies @main::ALL_LINES in-place)
+
+The function supports various sorting options through global flags:
+- -R: Reverse sort order  
+- -U: Numeric sort (uses <=> operator)
+- -I: Case-insensitive sort
+- -N: Normalize keys before sorting
+
+Uses O(1) space by building a hash of keys mapped to original lines.
+
+=cut
+
 sub sort_list( $ )
 {
     my $all_list_ref  = {};
@@ -98,9 +147,28 @@ sub sort_list( $ )
     }
 }
 
-# Dedups the ALL_LINES array using (O)1 space.
-# param:  list of columns to sort on.
-# return: <none> - removes duplicate values from the ALL_LINES list.
+=head2 dedup_list()
+
+Removes duplicate lines from @main::ALL_LINES based on specified columns.
+
+Parameters:
+  $wantedColumns - Array reference containing column indices to use for deduplication
+
+Returns: None (modifies @main::ALL_LINES in-place)
+
+The function supports various deduplication options:
+- -A: Include count of duplicates in output
+- -J: Perform aggregation operations (min, max, avg, sum, count)
+- -I: Case-insensitive key comparison
+- -N: Normalize keys before comparison
+- -R/-U: Sort output (reverse/numeric)
+- -P: Use pipe delimiter format for counts
+
+For -J operations, the function parses aggregation commands and applies
+mathematical operations using the do_op() function from Pipe::Math.
+
+=cut
+
 sub dedup_list( $ )
 {
     my $wantedColumns = shift;
@@ -201,9 +269,23 @@ sub dedup_list( $ )
     }
 }
 
-# Randomizes the entire list of input lines.
-# param:  <none>
-# return: <none>
+=head2 randomize_list()
+
+Randomly selects a percentage of lines from @main::ALL_LINES.
+
+Parameters: None (uses global options)
+
+Returns: None (modifies @main::ALL_LINES in-place)
+
+The function uses the -r option value as a percentage (0-100) to determine
+how many lines to select. Uses a hash-based approach to ensure unique
+random indices are selected. Always returns at least 1 line even for
+very small percentages.
+
+Supports -D debug flag to output selected random indices to STDERR.
+
+=cut
+
 sub randomize_list()
 {
     # Convert the user requested number to a percent lines of the file.
@@ -245,9 +327,26 @@ sub randomize_list()
     }
 }
 
-# param:  line from the file. Also an array of columns. We take the values from here and save them.
-# param:  Key of the column to store from the ref file.
-# return: none.
+=head2 push_merge_ref_columns()
+
+Extracts and stores column values from reference file data for later merging.
+
+Parameters:
+  $col_index - Array reference of column indices to extract
+  $line      - Array reference representing one line of data  
+  $key_col   - Column index to use as the lookup key
+
+Returns: None (stores data in %main::REF_FILE_DATA_HREF)
+
+The function extracts specified columns from a line and stores them in a global
+hash using the key column value as the hash key. Supports case-insensitive (-I)
+and normalization (-N) options for key processing.
+
+Uses @main::REF_LITERALS_FALSE for missing column values when defined.
+Joins extracted values with $main::DELIMITER for storage.
+
+=cut
+
 sub push_merge_ref_columns( $$$ )
 {
     my $col_index = shift;
@@ -283,9 +382,27 @@ sub push_merge_ref_columns( $$$ )
     print STDERR "$key => $values\n" if ( $main::opt{'D'} );
 }
 
-# Finalize operations that require the entire file to have been read
-# param:  none
-# return: None
+=head2 finalize_full_read_functions()
+
+Executes final processing operations after reading all input data.
+
+Parameters: None (uses global options and data)
+
+Returns: None (modifies global data structures)
+
+This function performs end-of-file operations based on command-line flags:
+
+- -d: Calls dedup_list() to remove duplicates
+- -r: Calls randomize_list() to select random percentage  
+- -s: Calls sort_list() to sort the data
+- -v: Computes final averages from %main::avg_ref and %main::avg_count
+
+For average computation (-v), divides accumulated sums by their counts
+and formats results to 3 decimal places. Only processes columns where
+both avg_ref and avg_count exist and count is non-zero.
+
+=cut
+
 sub finalize_full_read_functions()
 {
     if ( $main::opt{'d'} )
@@ -315,5 +432,51 @@ sub finalize_full_read_functions()
         }
     }
 }
+
+=head1 DEPENDENCIES
+
+This module requires:
+
+=over 4
+
+=item * Pipe::Core - For get_number_format() and trim() functions
+
+=item * Pipe::Column - For get_key() and get_column_value() functions  
+
+=item * Pipe::Text - For normalize() function
+
+=item * Pipe::Math - For do_op() aggregation operations
+
+=back
+
+=head1 GLOBAL VARIABLES
+
+This module operates on several global variables from the main:: namespace:
+
+=over 4
+
+=item * @main::ALL_LINES - Primary data array for processing
+
+=item * %main::opt - Command-line options hash
+
+=item * %main::ddup_ref - Deduplication data storage
+
+=item * %main::avg_ref, %main::avg_count - Average computation data
+
+=item * %main::REF_FILE_DATA_HREF - Reference file merge data
+
+=item * $main::DELIMITER, $main::PRECISION - Formatting options
+
+=back
+
+=head1 AUTHOR
+
+Generated for pipe.pl project
+
+=head1 SEE ALSO
+
+L<Pipe::Core>, L<Pipe::Column>, L<Pipe::Text>, L<Pipe::Math>
+
+=cut
 
 1;
