@@ -492,7 +492,7 @@ sub modify_case_line {
         }
         
         if ( $should_apply ) {
-            if ( $exp !~ m/(csv|lc|mc|uc|us|spc|csv|pipe|normal_[Ww,Ss,Dd,Pp,Qq,QQ]|order_\w+-\w+|collapse)/ )
+            if ( $exp !~ m/(csv|lc|mc|uc|us|spc|csv|pipe|normal_[WwSsDdPpqQ]|order_\w+-\w+|collapse)/ )
             {
                 printf STDERR "*** error case specifier. Expected (csv|lc|mc|uc|us|spc|csv|pipe|normal_(W|w,S|s,D|d,p|q|Q)|order_{xyz}-{zyx}|collapse) but got '%s'.\n", $case_ref->{ $i };
                 exit;
@@ -757,6 +757,22 @@ sub apply_translation {
     
     return $in_line;
 }
+
+=head2 apply_translation
+
+Applies search and replace operations to a string using Perl regex with optional flags.
+
+Parameters:
+- $in_line: The input string to transform
+- $trans_spec: Translation specification in format "search/replace/flags"
+
+Flags supported:
+- i: case insensitive matching
+- g: global replacement (all occurrences)
+
+Returns the transformed string.
+
+=cut
 
 # ===================================================
 # URL Encoding Operations
