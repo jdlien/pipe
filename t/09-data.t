@@ -142,6 +142,24 @@ subtest 'sort_list comprehensive tests' => sub {
         like($ALL_LINES[2], qr/^1/, 'Reverse numeric sort: 1 last');
     };
     
+    # TEST CASE FOR LINE 113: Reverse case-insensitive sort (missing coverage)
+    subtest 'reverse_case_insensitive_sort' => sub {
+        reset_test_globals();
+        @ALL_LINES = (
+            "apple|fruit",
+            "ZEBRA|animal",
+            "Banana|fruit"
+        );
+        %opt = ('R' => 1, 'U' => 0, 'I' => 1, 'D' => 0);  # Reverse + Case insensitive
+        my @sort_cols = (0);
+        
+        Pipe::Data::sort_list(\@sort_cols);
+        
+        like($ALL_LINES[0], qr/^ZEBRA/, 'Reverse case-insensitive sort: ZEBRA first');
+        like($ALL_LINES[1], qr/^Banana/, 'Reverse case-insensitive sort: Banana second');
+        like($ALL_LINES[2], qr/^apple/, 'Reverse case-insensitive sort: apple last');
+    };
+    
     # Edge cases
     subtest 'edge_cases_and_error_conditions' => sub {
         # Empty array
@@ -325,6 +343,26 @@ subtest 'dedup_list comprehensive tests' => sub {
         like($ALL_LINES[2], qr/apple/, 'reverse dedup puts apple last');
     };
     
+    # TEST CASE FOR LINE 210: Reverse text sort (not numeric) in dedup
+    subtest 'reverse_text_sort_dedup' => sub {
+        reset_test_globals();
+        @ALL_LINES = (
+            "100|hundred",
+            "20|twenty",
+            "3|three"
+        );
+        %ddup_ref = ();
+        %opt = ('I' => 0, 'N' => 0, 'A' => 0, 'J' => 0, 'R' => 1, 'U' => 0, 'P' => 0, 'D' => 0);  # R=1, U=0
+        my @dedup_cols = (0);
+        
+        Pipe::Data::dedup_list(\@dedup_cols);
+        
+        # Text sort: "3" > "20" > "100" when reversed
+        like($ALL_LINES[0], qr/^3/, 'reverse text dedup puts 3 first (text sort)');
+        like($ALL_LINES[1], qr/^20/, 'reverse text dedup puts 20 second');
+        like($ALL_LINES[2], qr/^100/, 'reverse text dedup puts 100 last');
+    };
+    
     # Numeric sort in dedup (-U)
     subtest 'numeric_sort_dedup' => sub {
         reset_test_globals();
@@ -410,6 +448,21 @@ subtest 'dedup_list comprehensive tests' => sub {
         
         eval { Pipe::Data::dedup_list(\@dedup_cols); };
         ok(!$@, 'dedup with J avg operation executes without error');
+        
+        # TEST CASE FOR LINE 250: J_CMD = avg but J_COUNT = 0
+        reset_test_globals();
+        @ALL_LINES = (
+            "group1|10",
+            "group2|20"
+        );
+        %ddup_ref = ();
+        %J_BUCKET_COUNTS = ();
+        $J_COUNT = 0;  # Zero count
+        $J_CMD = 'avg';  # Set to 'avg' to trigger the condition
+        %opt = ('J' => 'avg1', 'P' => 0);
+        
+        eval { Pipe::Data::dedup_list(\@dedup_cols); };
+        ok(!$@, 'dedup with J avg and J_COUNT=0 executes without error');
         
         # Test J operation with 'count' aggregate
         reset_test_globals();
@@ -624,6 +677,40 @@ subtest 'randomize_list comprehensive tests' => sub {
         eval { Pipe::Data::randomize_list(); };
         ok(!$@, 'randomize_list with debug mode executes without error');
         ok(scalar @ALL_LINES >= 1, 'Debug mode still produces results');
+    };
+    
+    # TEST CASE FOR LINE 145: Debug mode OFF in sort_list
+    subtest 'sort_debug_mode_off' => sub {
+        reset_test_globals();
+        @ALL_LINES = (
+            "charlie|30",
+            "alice|25",
+            "bob|35"
+        );
+        %opt = ('N' => 0, 'R' => 0, 'U' => 0, 'I' => 0, 'D' => 0);  # Debug OFF
+        my @sort_cols = (0);
+        
+        Pipe::Data::sort_list(\@sort_cols);
+        
+        like($ALL_LINES[0], qr/^alice/, 'Sort with debug off: alice first');
+        like($ALL_LINES[2], qr/^charlie/, 'Sort with debug off: charlie last');
+    };
+    
+    # TEST CASE FOR LINE 205: Debug mode OFF in dedup_list  
+    subtest 'dedup_debug_mode_off' => sub {
+        reset_test_globals();
+        @ALL_LINES = (
+            "apple|red",
+            "apple|green",
+            "banana|yellow"
+        );
+        %ddup_ref = ();
+        %opt = ('I' => 0, 'N' => 0, 'A' => 0, 'J' => 0, 'R' => 0, 'U' => 0, 'P' => 0, 'D' => 0);  # Debug OFF
+        my @dedup_cols = (0);
+        
+        Pipe::Data::dedup_list(\@dedup_cols);
+        
+        is(scalar @ALL_LINES, 2, 'Dedup with debug off works correctly');
     };
     
     # Consistency testing (verify randomness properties)
@@ -942,7 +1029,7 @@ subtest 'finalize_full_read_functions comprehensive tests' => sub {
         eval { Pipe::Data::finalize_full_read_functions(); };
         ok(!$@, 'finalize handles missing avg_count entries without error');
         
-        # Test average computation with valid counts - targets line 309 true branch
+        # Test average computation with valid counts - targets line 426 true branch
         reset_test_globals();
         %avg_ref = ('column1' => 30.0, 'column2' => 45.5);
         %avg_count = ('column1' => 5, 'column2' => 7);  # Both exist and non-zero
@@ -954,6 +1041,25 @@ subtest 'finalize_full_read_functions comprehensive tests' => sub {
         # Check that division was performed (values should be different)
         ok(defined $avg_ref{'column1'}, 'column1 average computed');
         ok(defined $avg_ref{'column2'}, 'column2 average computed');
+        
+        # Test specific branch coverage for line 426
+        # Case 1: avg_count entry doesn't exist (false on first condition)
+        reset_test_globals();
+        %avg_ref = ('col_with_count' => 100, 'col_without_count' => 200);
+        %avg_count = ('col_with_count' => 10);  # Missing col_without_count
+        %opt = ('v' => 1);
+        
+        eval { Pipe::Data::finalize_full_read_functions(); };
+        ok(!$@, 'finalize handles missing avg_count key (false on exists)');
+        
+        # Case 2: avg_count exists but is 0 (true on exists, false on != 0)
+        reset_test_globals();
+        %avg_ref = ('col_zero' => 150, 'col_nonzero' => 300);
+        %avg_count = ('col_zero' => 0, 'col_nonzero' => 5);  # col_zero has 0 count
+        %opt = ('v' => 1);
+        
+        eval { Pipe::Data::finalize_full_read_functions(); };
+        ok(!$@, 'finalize handles zero avg_count (true exists, false != 0)');
     };
     
     # Combined operations testing
