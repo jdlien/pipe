@@ -21,6 +21,7 @@ data/
 *.swo
 
 cover_db/
+cover_db_*/
 
 # Carton/cpanm dependencies
 local/

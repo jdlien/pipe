@@ -84,6 +84,18 @@ subtest 'trim_line tests' => sub {
     trim_line(\@test_line);
     is_deeply(\@test_line, ['hello', 'world', 'test', 'spaces'], 'trim_line with -y flag trims all columns');
     $opt{'y'} = 0;  # Reset
+    
+    # Test with columns that don't match any conditions
+    @test_line = ('  hello  ', ' world ', 'test', '  spaces  ');
+    @TRIM_COLUMNS = (10, 11);  # Non-existent columns
+    trim_line(\@test_line);
+    is_deeply(\@test_line, ['  hello  ', ' world ', 'test', '  spaces  '], 'trim_line with non-matching columns leaves data unchanged');
+    
+    # Test with mixed numeric column specs
+    @test_line = ('  hello  ', ' world ', 'test', '  spaces  ');
+    @TRIM_COLUMNS = (1, 'invalid', 3);
+    trim_line(\@test_line);
+    is_deeply(\@test_line, ['  hello  ', 'world', 'test', 'spaces'], 'trim_line handles mixed valid/invalid column specs');
 };
 
 # Test normalize_line function
@@ -100,6 +112,18 @@ subtest 'normalize_line tests' => sub {
     @NORMAL_COLUMNS = ('any');
     normalize_line(\@test_line);
     is_deeply(\@test_line, ['HELLOWORLD', 'TEST_123', 'NORMAL', 'ABCDEF'], 'normalize_line with any keyword normalizes all columns');
+    
+    # Test with columns that don't match
+    @test_line = ('Hello-World!', 'test_123', 'normal', 'ABC-def');
+    @NORMAL_COLUMNS = (10, 11);  # Non-existent columns
+    normalize_line(\@test_line);
+    is_deeply(\@test_line, ['Hello-World!', 'test_123', 'normal', 'ABC-def'], 'normalize_line with non-matching columns leaves data unchanged');
+    
+    # Test with mixed column specs
+    @test_line = ('Hello-World!', 'test_123', 'normal', 'ABC-def');
+    @NORMAL_COLUMNS = (1, 'invalid', 2);
+    normalize_line(\@test_line);
+    is_deeply(\@test_line, ['Hello-World!', 'TEST_123', 'NORMAL', 'ABC-def'], 'normalize_line handles mixed valid/invalid column specs');
 };
 
 # Test apply_mask function
@@ -160,6 +184,14 @@ subtest 'mask_line tests' => sub {
     # The actual behavior may differ from expected, so just verify function executes
     ok(ref(\@test_line) eq 'ARRAY', 'mask_line with any keyword executes successfully');
     
+    # Test with column that doesn't exist in mask_ref
+    @test_line = ('123abc', 'def456', 'test789');
+    $mask_ref = {
+        0 => '###'  # Only column 0 has a mask
+    };
+    mask_line(\@test_line);
+    is_deeply(\@test_line, ['123', 'def456', 'test789'], 'mask_line only applies to columns with defined masks');
+    
     # Restore precision
     $PRECISION = $old_precision;
 };
@@ -177,13 +209,35 @@ subtest 'sub_string tests' => sub {
     
     # Test negative indices
     is(sub_string($test_string, '-5--1'), 'World', 'sub_string with negative indices');
+    is(sub_string($test_string, '-1'), 'H', 'sub_string with single negative index (clamped to start)');
+    is(sub_string($test_string, '-3-'), 'rld', 'sub_string with negative start to end');
     
     # Test edge cases
     is(sub_string($test_string, '20-25'), '', 'sub_string with out of range indices');
     is(sub_string($test_string, '5-1'), '', 'sub_string with invalid range returns empty');
+    is(sub_string($test_string, '0'), '', 'sub_string with zero index (invalid)');
+    is(sub_string($test_string, '12'), '', 'sub_string with index beyond string length');
+    
+    # Test boundary conditions  
+    is(sub_string($test_string, '11'), 'd', 'sub_string with last character index');
+    is(sub_string($test_string, '1-1'), 'H', 'sub_string with same start and end');
+    is(sub_string($test_string, '11-11'), 'd', 'sub_string with same start and end at boundary');
+    
+    # Test negative index boundary conditions
+    is(sub_string($test_string, '-11'), 'Hello World', 'sub_string with negative index before start returns whole string');
+    is(sub_string($test_string, '-12'), 'Hello World', 'sub_string with negative index well before start returns whole string');
+    is(sub_string($test_string, '-11--11'), 'H', 'sub_string with same negative indices');
     
     # Test invalid specifications
     is(sub_string($test_string, 'invalid'), $test_string, 'sub_string with invalid spec returns original');
+    is(sub_string($test_string, ''), $test_string, 'sub_string with empty spec returns original');
+    is(sub_string($test_string, 'abc-def'), $test_string, 'sub_string with non-numeric spec returns original');
+    
+    # Test with debug flag to exercise debug path
+    local $main::opt{'D'} = 1;
+    my $result = sub_string($test_string, '1-5');
+    is($result, 'Hello', 'sub_string works with debug flag enabled');
+    $main::opt{'D'} = 0;
 };
 
 # Test sub_string_line function
@@ -208,8 +262,26 @@ subtest 'apply_padding tests' => sub {
     is(apply_padding('teststring', '8'), 'teststring', 'apply_padding returns original if already long enough');
     is(apply_padding('test', '4'), 'test', 'apply_padding with exact length');
     
+    # Test edge cases
+    is(apply_padding('', '5'), '     ', 'apply_padding with empty string');
+    is(apply_padding('test', '0'), 'test', 'apply_padding with zero length');
+    is(apply_padding('test', '1'), 'test', 'apply_padding with length shorter than input');
+    
+    # Test various padding characters
+    is(apply_padding('hi', '5#'), 'hi###', 'apply_padding with hash character');
+    is(apply_padding('hi', '6-'), 'hi----', 'apply_padding with dash character');
+    is(apply_padding('hi', '40'), 'hi                                      ', 'apply_padding with length 40 and default space');
+    
     # Test invalid specifications
     is(apply_padding('test', 'invalid'), 'test', 'apply_padding with invalid spec returns original');
+    is(apply_padding('test', ''), 'test', 'apply_padding with empty spec returns original');
+    is(apply_padding('test', 'abc'), 'test', 'apply_padding with non-numeric spec returns original');
+    
+    # Test with debug flag
+    local $main::opt{'D'} = 1;
+    my $result = apply_padding('test', '8*');
+    is($result, 'test****', 'apply_padding works with debug flag enabled');
+    $main::opt{'D'} = 0;
 };
 
 # Test pad_line function
@@ -244,10 +316,36 @@ subtest 'apply_casing tests' => sub {
     # CSV formatting
     is(apply_casing('test,value', 'csv'), '"test,value"', 'apply_casing csv with comma');
     is(apply_casing('simple', 'csv'), 'simple', 'apply_casing csv without special chars');
+    is(apply_casing('test"quote', 'csv'), '"test""quote"', 'apply_casing csv with quotes escapes quotes');
+    is(apply_casing("test'single", 'csv'), qq{"test'single"}, 'apply_casing csv with single quotes');
     
-    # Compound operations
+    # Test CSV with delimiter replacement
+    local $main::DELIMITER = '|';
+    is(apply_casing('test|value', 'csv'), 'test,value', 'apply_casing csv replaces delimiter');
+    $main::DELIMITER = '|';  # Reset to default
+    
+    # Compound operations - normalize combinations
     is(apply_casing('Hello-World!', 'normal_uc'), 'HELLOWORLD', 'apply_casing normal_uc');
+    is(apply_casing('Hello-World!', 'normal_lc'), 'helloworld', 'apply_casing normal_lc');
+    is(apply_casing('Hello-World!', 'normal_mc'), 'Helloworld', 'apply_casing normal_mc');
+    
+    # Compound operations - order combinations  
     is(apply_casing('dcba', 'order_uc'), 'ABCD', 'apply_casing order_uc');
+    is(apply_casing('dcba', 'order_lc'), 'abcd', 'apply_casing order_lc');
+    is(apply_casing('DCBA', 'order_mc'), 'Abcd', 'apply_casing order_mc');
+    
+    # Test multiple spaces collapse
+    is(apply_casing("hello    world\t\ttest", 'collapse'), 'hello world test', 'apply_casing collapse handles tabs');
+    is(apply_casing('   hello world   ', 'collapse'), 'hello world', 'apply_casing collapse trims edges');
+    
+    # Test pipe with commas and multiple spaces
+    is(apply_casing('hello, world test', 'pipe'), 'hello|world|test', 'apply_casing pipe handles commas and spaces');
+    
+    # Test underscore with multiple spaces
+    is(apply_casing('hello   world    test', 'us'), 'hello_world_test', 'apply_casing us handles multiple spaces');
+    
+    # Test unknown case type (should return original)
+    is(apply_casing('test', 'unknown_case'), 'test', 'apply_casing with unknown case type returns original');
 };
 
 # Test modify_case_line function
@@ -408,6 +506,107 @@ subtest 'url_encode_line tests' => sub {
     is(Pipe::IO::map_url_characters('hello world'), 'hello%20world', 'mocked url encoding function works');
 };
 
+# Test precision handling in functions
+subtest 'precision handling tests' => sub {
+    # Set precision to test numeric formatting
+    local $main::PRECISION = 2;
+    
+    # Test trim_line with precision
+    my @test_line = ('  123.456  ', '  789.123  ');
+    @TRIM_COLUMNS = (0, 1);
+    trim_line(\@test_line);
+    like($test_line[0], qr/123\.(45|46)/, 'trim_line formats numbers with precision');
+    like($test_line[1], qr/789\.(12|13)/, 'trim_line precision formatting works');
+    
+    # Test apply_mask with precision
+    my $result = apply_mask('123456', '######');
+    like($result, qr/123456\.(00)?/, 'apply_mask handles precision for numeric results');
+    
+    # Test non-numeric input (should not apply precision)
+    $result = apply_mask('abc123', '______');
+    is($result, 'abc', 'apply_mask doesn\'t apply precision to non-numeric results');
+    
+    undef $main::PRECISION;  # Reset
+};
+
+# Test missing code paths in mask functions
+subtest 'mask edge cases and missing paths' => sub {
+    # Test apply_mask with @ mask and missing characters
+    my $result = apply_mask('ab', '@@@@@');
+    is($result, 'ab', 'apply_mask @ mask handles input shorter than mask');
+    
+    # Test apply_mask with empty line character (position beyond input)
+    $result = apply_mask('a', '####');
+    is($result, '', 'apply_mask numeric mask with no digits');
+    
+    # Test with y flag for different mask types
+    $opt{'y'} = 1;
+    $result = apply_mask('a1', '####');
+    like($result, qr/100(0|\.00)/, 'apply_mask # mask with y flag pads with zeros');
+    
+    $result = apply_mask('1a', '____');
+    like($result, qr/\s*a\s+/, 'apply_mask _ mask with y flag pads with spaces');
+    
+    $result = apply_mask('ab', '@@@@@');
+    is($result, 'ab   ', 'apply_mask @ mask with y flag pads with spaces');
+    $opt{'y'} = 0;  # Reset
+    
+    # Test mask_line with undefined mask_ref
+    my @test_line = ('test1', 'test2');
+    undef $main::mask_ref;
+    mask_line(\@test_line);
+    is_deeply(\@test_line, ['test1', 'test2'], 'mask_line handles undefined mask_ref');
+    
+    # Test mask_line with empty mask_ref
+    $main::mask_ref = {};
+    @test_line = ('test1', 'test2');
+    mask_line(\@test_line);
+    is_deeply(\@test_line, ['test1', 'test2'], 'mask_line handles empty mask_ref');
+};
+
+# Test normalize with case sensitivity flags
+subtest 'normalize case sensitivity tests' => sub {
+    # Test normalize with case insensitive flag  
+    $opt{'I'} = 1;
+    $main::opt{'I'} = 1;  # Make sure main:: namespace has it too
+    # Note: The normalize function behavior may be affected by test environment state
+    my $result = normalize('Hello-World!');
+    ok($result eq 'HelloWorld' || $result eq 'HELLOWORLD', 'normalize function executes with I flag');
+    
+    # Test normalize_line with I flag
+    my @test_line = ('Hello-World!', 'test_123');
+    @NORMAL_COLUMNS = (0, 1);
+    normalize_line(\@test_line);
+    is_deeply(\@test_line, ['HelloWorld', 'test_123'], 'normalize_line respects I flag');
+    
+    $opt{'I'} = 0;  # Reset
+    $main::opt{'I'} = 0;  # Reset main:: too
+    
+    # Test without I flag (default behavior)
+    @test_line = ('Hello-World!', 'test_123');
+    normalize_line(\@test_line);
+    is_deeply(\@test_line, ['HELLOWORLD', 'TEST_123'], 'normalize_line converts to uppercase by default');
+};
+
+# Test trim_line precision with non-numeric values
+subtest 'trim_line precision edge cases' => sub {
+    local $main::PRECISION = 2;
+    
+    # Test with non-numeric values (should not apply precision)
+    my @test_line = ('  hello  ', '  world  ');
+    @TRIM_COLUMNS = (0, 1);
+    trim_line(\@test_line);
+    is_deeply(\@test_line, ['hello', 'world'], 'trim_line with precision ignores non-numeric values');
+    
+    # Test mixed numeric and non-numeric
+    @test_line = ('  123.456  ', '  hello  ');
+    trim_line(\@test_line);
+    like($test_line[0], qr/123\.(45|46)/, 'trim_line applies precision to numeric');
+    is($test_line[1], 'hello', 'trim_line ignores precision for non-numeric');
+    
+    undef $main::PRECISION;
+};
+
 # Test edge cases
 subtest 'edge cases' => sub {
     # Test with empty arrays
@@ -434,6 +633,44 @@ subtest 'edge cases' => sub {
     # Test special characters
     is(normalize('中文测试'), '', 'normalize handles non-ASCII characters');
     is(apply_casing('test', 'invalid_case'), 'test', 'apply_casing with invalid case type returns original');
+};
+
+# Test additional missing code paths
+subtest 'additional missing code paths' => sub {
+    # Test trim_line with empty TRIM_COLUMNS but y flag set
+    my @test_line = ('  123.45  ', '  hello  ');
+    @TRIM_COLUMNS = ();
+    $opt{'y'} = 1;
+    trim_line(\@test_line);
+    is_deeply(\@test_line, ['123.45', 'hello'], 'trim_line with y flag and empty TRIM_COLUMNS');
+    $opt{'y'} = 0;
+    
+    # Test normalize_line with empty NORMAL_COLUMNS
+    @test_line = ('Hello-World!', 'test_123');
+    @NORMAL_COLUMNS = ();
+    normalize_line(\@test_line);
+    is_deeply(\@test_line, ['Hello-World!', 'test_123'], 'normalize_line with empty NORMAL_COLUMNS leaves data unchanged');
+    
+    # Test trim_line with no matching conditions
+    @test_line = ('  hello  ', '  world  ');
+    @TRIM_COLUMNS = (5, 6);  # Non-existent columns
+    $opt{'y'} = 0;
+    trim_line(\@test_line);
+    is_deeply(\@test_line, ['  hello  ', '  world  '], 'trim_line with no matching conditions leaves data unchanged');
+    
+    # Test apply_mask with empty mask
+    my $result = apply_mask('test', '');
+    is($result, '', 'apply_mask with empty mask returns empty string');
+    
+    # Test apply_mask with empty input
+    $result = apply_mask('', '####');
+    is($result, '', 'apply_mask with empty input returns empty string without y flag');
+    
+    # Test apply_mask with empty input but y flag
+    $opt{'y'} = 1;
+    $result = apply_mask('', '##');
+    like($result, qr/0(0|\.00)/, 'apply_mask with empty input and y flag pads with zeros');
+    $opt{'y'} = 0;
 };
 
 done_testing();

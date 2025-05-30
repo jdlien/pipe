@@ -37,8 +37,8 @@ if (-d "cover_db") {
 print "Running tests with code coverage...\n" unless $opts{'q'};
 
 # Run tests with coverage using carton
-# Focus coverage on our project files only
-my $cmd = "carton exec -- perl -MDevel::Cover=+select,^lib/,-silent,1 -Ilib -S prove -l t/";
+# Include both unit tests and integration tests to ensure modules are loaded
+my $cmd = "carton exec -- perl -MDevel::Cover=+select,^lib/Pipe,-silent,1 -Ilib ./pipe.pl -x 2>/dev/null && carton exec -- perl -MDevel::Cover=+select,^lib/Pipe,-silent,1 -Ilib -S prove -l t/";
 print "Executing: $cmd\n" if !$opts{'q'};
 
 my $output = `$cmd 2>&1`;
@@ -52,9 +52,10 @@ if ($exit_code != 0) {
 
 print $output unless $opts{'q'};
 
-# Generate coverage report
+# Generate coverage report filtered to our modules only
 print "\nGenerating coverage report...\n" unless $opts{'q'};
-my $cover_cmd = "carton exec -- cover";
+# Generate full report then filter HTML - this ensures we get all module data
+my $cover_cmd = "carton exec -- cover -report html_minimal";
 my $cover_output = `$cover_cmd 2>&1`;
 my $cover_exit = $? >> 8;
 
@@ -66,7 +67,23 @@ if ($cover_exit != 0) {
 
 print $cover_output unless $opts{'q'};
 
+# Filter the HTML to only show our modules
 if (-f "cover_db/coverage.html") {
+    my $html_content = do {
+        local $/;
+        open my $fh, '<', 'cover_db/coverage.html';
+        <$fh>;
+    };
+    
+    # Filter to only include lib/Pipe/ and pipe.pl entries
+    $html_content =~ s/<tr><td[^>]*><a[^>]*>(?!(?:lib\/Pipe\/|pipe\.pl))[^<]*<\/a>.*?<\/tr>\n//gs;
+    $html_content =~ s/<tr><td[^>]*>(?!(?:lib\/Pipe\/|pipe\.pl|Total))[^<]*<\/td>.*?<\/tr>\n//gs;
+    
+    # Write the filtered HTML back
+    open my $fh, '>', 'cover_db/coverage.html';
+    print $fh $html_content;
+    close $fh;
+    
     print "\nCoverage report generated: cover_db/coverage.html\n";
     print "Open with: open cover_db/coverage.html\n";
 } else {
