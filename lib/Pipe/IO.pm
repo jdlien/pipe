@@ -15,11 +15,12 @@ our @EXPORT_OK = qw(
     is_printable_range
     build_encoding_table
     map_url_characters
+    process_custom_delimiter
 );
 
 our %EXPORT_TAGS = (
     output => [qw(prepare_table_data table_output print_summary)],
-    input => [qw(is_printable_range)],
+    input => [qw(is_printable_range process_custom_delimiter)],
     encoding => [qw(build_encoding_table map_url_characters)],
 );
 
@@ -374,6 +375,44 @@ sub is_printable_range {
     return 0;
 }
 
+# Process custom delimiter conversion for -W flag
+# Converts custom delimiters to internal pipe format while preserving quoted text
+# param:  line - the input line to process
+# param:  custom_delimiter - the custom delimiter pattern (from $opt{'W'})
+# return: processed line with pipes as delimiters, array of column data
+sub process_custom_delimiter {
+    my $line = shift;
+    my $custom_delimiter = shift;
+    
+    return ($line, [split '\|', $line]) unless $custom_delimiter;
+    
+    # Constants from main script
+    my $SUB_DELIMITER = '___PIPE___';
+    my $QUOTED_DELIMITER = '___QUOTED_DELIMITER___';
+    
+    # Handle quoted sections - don't split delimiters inside quotes
+    my @segments = split /"/, $line;  # fix SO syntax highlighting: "
+    push @segments, '' if ( scalar( @segments ) % 2 == 0 );
+    s/($custom_delimiter)/$QUOTED_DELIMITER/g for @segments[ grep $_ % 2, 0 .. $#segments ];
+    $line = join '"', @segments;
+    
+    # Replace delimiter selection with '|' pipe.
+    $line =~ s/\|/$SUB_DELIMITER/g; # _PIPE_
+    # Now replace the user selected delimiter with a pipe.
+    $line =~ s/($custom_delimiter)/\|/g;
+    my $spc_delim = $custom_delimiter;
+    $spc_delim =~ s/\\s[+]?/ /g;
+    $line =~ s/($QUOTED_DELIMITER)/$spc_delim/g;
+    
+    # Split into columns and restore original pipes
+    my @columns = split '\|', $line;
+    foreach my $col ( @columns ) {
+        # Replace the sub delimiter to preserve the default pipe delimiter when using -W.
+        $col =~ s/($SUB_DELIMITER)/\|/g;
+    }
+    
+    return ($line, \@columns);
+}
 
 # Module-level URL character encoding table
 my $url_characters = {};

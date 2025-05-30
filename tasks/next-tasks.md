@@ -37,6 +37,10 @@ The pipe.pl project now has a **comprehensive testing infrastructure** with exce
 3. **✅ Modern Development**: Carton, coverage analysis, code quality tools
 4. **✅ Documentation**: Comprehensive README and inline documentation
 5. **✅ CI-Ready**: All tests pass consistently
+6. **✅ Code Cleanup**: Removed duplicate functions and dead code
+   - Removed duplicate `normalize` and `parse_line_ranges` functions
+   - Extracted duplicate delimiter processing logic to `Pipe::IO::process_custom_delimiter()`
+   - Fixed misleading comments about `format_radix` function
 
 ## Low-Priority Future Improvements
 
@@ -56,6 +60,13 @@ The pipe.pl project now has a **comprehensive testing infrastructure** with exce
   - **Assessment**: Low priority - violations are primarily style preferences rather than code quality issues
 - **Documentation**: Add more POD examples for complex functions
 - **Refactoring**: Minor cleanup of remaining large functions in pipe.pl
+
+### Additional Cleanup Opportunities (Low Priority)
+- **Unused Imports**: Remove `get_number_format` import from pipe.pl (imported but never used)
+- **Global Variable Optimization**: Consider moving `$RELAX_o_EXCLUDE` and `$COLLAPSE_OPTION` to modules that use them
+- **Function Signature**: Fix `is_printable_range()` to remove unused second parameter
+- **Line Processing**: Optimize redundant `chomp`/`trim` operations on same data
+- **Code Efficiency**: Review 340-line `process_line` function for potential simplification
 
 ### Feature Development (Future)
 - **New Features**: Any user-requested functionality

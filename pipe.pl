@@ -43,7 +43,7 @@ use lib '../lib';
 use Pipe::Core qw(trim get_number_format);
 use Pipe::Utils qw(:all);
 use Pipe::Context;
-use Pipe::IO qw(:output :encoding);
+use Pipe::IO qw(:output :encoding process_custom_delimiter);
 use Pipe::Column qw(:all);
 use Pipe::Text;
 use Pipe::Match qw(:all);
@@ -1019,29 +1019,10 @@ if ( defined $opt{'0'} && defined $opt{'M'} )
         {
             $line = shift( @ALT_LINES );
             next if ( $opt{'8'} && $line =~ /($opt{'8'})/ );
-            if ( $opt{'W'} )
-            {
-                my @segments = split /"/, $line;  # fix SO syntax highlighting: "
-                push @segments, '' if ( scalar( @segments ) % 2 == 0 );
-                s/($opt{'W'})/$QUOTED_DELIMITER/g for @segments[ grep $_ % 2, 0 .. $#segments ];
-                $line = join '"', @segments;
-                # Replace delimiter selection with '|' pipe.
-                $line =~ s/\|/$SUB_DELIMITER/g; # _PIPE_
-                # Now replace the user selected delimiter with a pipe.
-                $line =~ s/($opt{'W'})/\|/g;
-                my $spc_delim = $opt{'W'};
-                $spc_delim =~ s/\\s[+]?/ /g;
-                $line =~ s/($QUOTED_DELIMITER)/$spc_delim/g;
-            }
-            my @columns = split '\|', $line;
-            if ( $opt{'W'} )
-            {
-                foreach my $col ( @columns )
-                {
-                    # Replace the sub delimiter to preserve the default pipe delimiter when using -W.
-                    $col =~ s/($SUB_DELIMITER)/\|/g;
-                }
-            }
+            # Process custom delimiter if -W flag is used
+            my $columns_ref;
+            ($line, $columns_ref) = Pipe::IO::process_custom_delimiter($line, $opt{'W'});
+            my @columns = @$columns_ref;
             # Save all the true and false column values.
             Pipe::Data::push_merge_ref_columns( \@REF_COLUMN_INDEX_TRUE, \@columns, $MERGE_REF_COLUMNS[0] );
             # The false values are literals taken from the command line.
@@ -1087,20 +1068,8 @@ while (<$ifh>)
             # remove leading trailing white space to avoid initial empty pipe fields.
             # Also gracefully handles Windows' EOL handling.
             $line = trim( $line );
-            if ( $opt{'W'} )
-            {
-                my @segments = split /"/, $line;  # fix SO syntax highlighting: "
-                push @segments, '' if ( scalar( @segments ) % 2 == 0 );
-                s/($opt{'W'})/$QUOTED_DELIMITER/g for @segments[ grep $_ % 2, 0 .. $#segments ];
-                $line = join '"', @segments;
-                # Replace delimiter selection with '|' pipe.
-                $line =~ s/\|/$SUB_DELIMITER/g; # _PIPE_
-                # Now replace the user selected delimiter with a pipe.
-                $line =~ s/($opt{'W'})/\|/g;
-                my $spc_delim = $opt{'W'};
-                $spc_delim =~ s/\\s[+]?/ /g;
-                $line =~ s/($QUOTED_DELIMITER)/$spc_delim/g;
-            }
+            # Process custom delimiter if -W flag is used  
+            ($line, undef) = Pipe::IO::process_custom_delimiter($line, $opt{'W'});
             push @ALL_LINES, $line;
         }
         last if ( $FAST_FORWARD );
