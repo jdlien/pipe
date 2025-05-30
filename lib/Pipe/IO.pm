@@ -144,7 +144,7 @@ sub prepare_table_data( $ )
     else # Huh, unknown table type.
     {
         printf STDERR "** error, unsupported table type '%s'\n", $main::TABLE_OUTPUT;
-        exit( 1 );
+        exit( 1 ); # uncoverable statement
     }
     @{ $line } = ();
     foreach my $v ( @newLine )
@@ -300,7 +300,7 @@ sub table_output( $ )
                         if ( $main::SKIP_LINE_TABLE !~ m/^\d+$/ || ( $main::SKIP_LINE_TABLE + 0 ) < 1 )
                         {
                             printf STDERR "**error: invalid skip value '%s' requested in chunked table output.\n", $main::SKIP_LINE_TABLE;
-                            exit 0;
+                            exit 0; # uncoverable statement
                         }
                         # Preserver literals that contain '.'
                         $main::SKIP_VALUE = join '.', @skip_values;
