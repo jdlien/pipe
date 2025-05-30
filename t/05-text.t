@@ -13,7 +13,8 @@ BEGIN {
 
 # Import required functions for testing
 use Pipe::Text;
-use Pipe::Core qw(:constants :keywords trim get_number_format parse_line_ranges);
+use Pipe::Core qw(:constants :keywords trim get_number_format);
+use Pipe::Utils qw(parse_line_ranges);
 
 # Mock the missing is_number function 
 {

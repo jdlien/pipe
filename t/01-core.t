@@ -55,34 +55,6 @@ subtest 'trim function comprehensive tests' => sub {
     ok(!defined($undef_result) || $undef_result eq '', 'trim handles undef with length gracefully');
 };
 
-# Test normalize function - comprehensive testing
-subtest 'normalize function comprehensive tests' => sub {
-    # Basic functionality
-    is(Pipe::Core::normalize('Hello World!'), 'HELLOWORLD', 'normalize removes non-word chars and uppercases');
-    is(Pipe::Core::normalize('test-123_ABC'), 'TEST123_ABC', 'normalize handles various characters');
-    
-    # Test various special characters
-    is(Pipe::Core::normalize('hello@world#test'), 'HELLOWORLDTEST', 'normalize removes symbols');
-    is(Pipe::Core::normalize('test.with.dots'), 'TESTWITHDOTS', 'normalize removes dots');
-    is(Pipe::Core::normalize('spaces   and   tabs\t\n'), 'SPACESANDTABSTN', 'normalize removes whitespace');
-    is(Pipe::Core::normalize('123-456-789'), '123456789', 'normalize removes hyphens from numbers');
-    
-    # Test edge cases
-    is(Pipe::Core::normalize(''), '', 'normalize handles empty string');
-    is(Pipe::Core::normalize('   '), '', 'normalize handles only whitespace');
-    is(Pipe::Core::normalize('!@#$%^&*()'), '', 'normalize handles only special chars');
-    is(Pipe::Core::normalize('_test_'), '_TEST_', 'normalize preserves underscores');
-    is(Pipe::Core::normalize('123456'), '123456', 'normalize preserves numbers');
-    is(Pipe::Core::normalize('OnlyLetters'), 'ONLYLETTERS', 'normalize handles only letters');
-    
-    # Test with undef (may not handle well)
-    my $undef_result = Pipe::Core::normalize(undef);
-    ok(!defined($undef_result) || $undef_result eq '', 'normalize handles undef gracefully');
-    
-    # Test various Unicode and special cases
-    is(Pipe::Core::normalize('café'), 'CAF', 'normalize removes accented characters');
-    is(Pipe::Core::normalize('test\r\n\t'), 'TESTRNT', 'normalize removes control characters');
-};
 
 # Test get_number_format function - comprehensive branch testing
 subtest 'get_number_format comprehensive tests' => sub {
@@ -151,18 +123,6 @@ subtest 'get_number_format comprehensive tests' => sub {
     is(Pipe::Core::get_number_format('1.5', 0, 1), '1.5', 'Simple decimal with precision');
 };
 
-# Test parse_line_ranges function
-subtest 'parse_line_ranges function tests' => sub {
-    # Test basic functionality (currently a stub)
-    my $result = Pipe::Core::parse_line_ranges('1-10');
-    is(ref($result), 'HASH', 'parse_line_ranges returns hash reference');
-    
-    # Test with various inputs to exercise the function
-    is(ref(Pipe::Core::parse_line_ranges('')), 'HASH', 'parse_line_ranges handles empty string');
-    is(ref(Pipe::Core::parse_line_ranges('1')), 'HASH', 'parse_line_ranges handles single number');
-    is(ref(Pipe::Core::parse_line_ranges('1,5,10-20')), 'HASH', 'parse_line_ranges handles complex range');
-    is(ref(Pipe::Core::parse_line_ranges(undef)), 'HASH', 'parse_line_ranges handles undef');
-};
 
 # Test additional constants and exports
 subtest 'additional constants and exports' => sub {
@@ -208,7 +168,6 @@ subtest 'edge cases and error conditions' => sub {
     # Test with very long strings
     my $long_string = 'x' x 10000;
     is(length(Pipe::Core::trim("  $long_string  ")), 10000, 'trim handles long strings');
-    is(length(Pipe::Core::normalize($long_string)), 10000, 'normalize handles long strings');
     
     # Test with special numeric formats for get_number_format
     is(Pipe::Core::get_number_format('0'), '0', 'get_number_format handles zero');

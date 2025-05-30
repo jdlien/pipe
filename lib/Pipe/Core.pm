@@ -48,7 +48,7 @@ our @EXPORT_OK = qw(
     $ALLOW_SCRIPTING $COLLAPSE_OPTION
     $READ_FULL $KEEP_LINES $FAST_FORWARD
     $PRECISION
-    get_number_format trim normalize parse_line_ranges
+    get_number_format
 );
 
 our %EXPORT_TAGS = (
@@ -68,8 +68,7 @@ our %EXPORT_TAGS = (
         $READ_FULL $KEEP_LINES $FAST_FORWARD
     )],
     functions => [qw(
-        trim normalize
-        get_number_format parse_line_ranges
+        trim get_number_format
     )]
 );
 
@@ -89,19 +88,6 @@ sub trim
     return $string;
 }
 
-# Normalize data. Removes all non-word characters from the input string and
-# transforms all output to upper case.
-# param:  string to normalize.
-# return: upper case string with all non-word characters removed.
-# Note: This function will need access to $opt{'I'} from context in the future
-sub normalize( $ )
-{
-    my $line = shift;
-    $line =~ s/\W+//g;
-    # For now, always uppercase. The case sensitivity will be handled
-    # by the calling code until we have access to context
-    return uc $line;
-}
 
 # Formats a number based on type and precision
 # param:  input - the number to format
@@ -126,18 +112,6 @@ sub get_number_format
     return $summary;
 }
 
-# Parses line range specifications for -L option
-# param:  range string from command line
-# return: updates global LINE_RANGES hash (will be moved to context later)
-# Note: This function currently modifies global state directly.
-# It will need to be refactored to work with context object.
-sub parse_line_ranges( $ )
-{
-    my $range_str = shift;
-    # This is a stub that will be properly implemented when integrated
-    # For now, just return to avoid errors
-    return {};
-}
 
 1;
 
@@ -156,7 +130,6 @@ Pipe::Core - Core constants and utilities for pipe.pl
     
     # Use functions
     my $trimmed = trim("  hello  ");
-    my $normalized = normalize("Hello World!");
 
 =head1 DESCRIPTION
 
@@ -168,7 +141,7 @@ used throughout the pipe.pl application.
 By default, this module exports:
 - Basic constants: $TRUE, $FALSE, $DELIMITER
 - Basic keywords: $KEYWORD_ANY, $KEYWORD_REMAINING
-- Basic functions: trim(), normalize()
+- Basic functions: trim()
 
 Additional constants and functions are available through explicit import.
 
@@ -179,17 +152,10 @@ Additional constants and functions are available through explicit import.
 Removes leading and trailing whitespace from a string.
 Optionally truncates to specified length after trimming.
 
-=head2 normalize($string)
-
-Removes all non-word characters and converts to uppercase.
-
 =head2 get_number_format($input, [$number_type], [$precision])
 
 Formats a number according to type and precision specifications.
 
-=head2 parse_line_ranges($range_string)
-
-Parses line range specifications for the -L option.
 
 =head1 AUTHOR
 

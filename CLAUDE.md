@@ -12,7 +12,7 @@ Readme.md is the documentation for this project and serves as a detailed specifi
 pipe/
 ├── pipe.pl          # Main application (~5000+ lines, partially modularized)
 ├── lib/Pipe/        # Module library (NEW - modularized code)
-│   ├── Core.pm      # Core utilities (trim, normalize, formatting)
+│   ├── Core.pm      # Core utilities (trim, formatting, constants)
 │   ├── Context.pm   # State management and configuration
 │   ├── IO.pm        # Input/output operations
 │   ├── Column.pm    # Column operations (order, merge, etc.)

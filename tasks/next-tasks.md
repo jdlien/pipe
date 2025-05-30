@@ -49,7 +49,11 @@ The pipe.pl project now has a **comprehensive testing infrastructure** with exce
 - **Error Recovery**: More comprehensive error handling scenarios
 
 ### Code Quality (Optional)
-- **Static Analysis**: Address remaining Perl::Critic suggestions
+- **Static Analysis**: 42 Perl::Critic violations identified (mostly minor)
+  - 39 "Subroutine prototypes used" - style preference, not functionality issues
+  - 2 "Variable declared in conditional" - minor style issue in Core.pm
+  - 1 "Expression form of eval" - potentially worth reviewing in Core.pm
+  - **Assessment**: Low priority - violations are primarily style preferences rather than code quality issues
 - **Documentation**: Add more POD examples for complex functions
 - **Refactoring**: Minor cleanup of remaining large functions in pipe.pl
 

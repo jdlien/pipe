@@ -780,7 +780,7 @@ sub process_line( $ )
         Pipe::Text::modify_case_line( \@columns, $case_ref ) if ( $opt{'e'} );
         Pipe::Text::replace_line( \@columns )           if ( $opt{'E'} );
         Pipe::Text::flip_char_line( \@columns )         if ( $opt{'f'} );
-        Pipe::Utils::format_radix( \@columns )           if ( $opt{'F'} ); # Function removed
+        Pipe::Utils::format_radix( \@columns )           if ( $opt{'F'} );
         Pipe::Text::url_encode_line( \@columns )        if ( $opt{'u'} );
         Pipe::Text::translate_line( \@columns )         if ( $opt{'l'} );
         Pipe::Text::mask_line( \@columns )              if ( $opt{'m'} );
@@ -903,7 +903,7 @@ sub init
     @TRANSLATE_COLUMNS = Pipe::Column::read_requested_qualified_columns( $opt{'l'}, $trans_ref, $KEYWORD_ANY )       if ( $opt{'l'} );
     @PAD_COLUMNS       = Pipe::Column::read_requested_qualified_columns( $opt{'p'}, $pad_ref )         if ( $opt{'p'} );
     @FLIP_COLUMNS      = Pipe::Column::read_requested_qualified_columns( $opt{'f'}, $flip_ref )        if ( $opt{'f'} );
-    @FORMAT_COLUMNS    = Pipe::Column::read_requested_qualified_columns( $opt{'F'}, $format_ref )      if ( $opt{'F'} ); # Related to removed format_radix function
+    @FORMAT_COLUMNS    = Pipe::Column::read_requested_qualified_columns( $opt{'F'}, $format_ref )      if ( $opt{'F'} );
     @COMPARE_COLUMNS   = Pipe::Utils::read_requested_columns( $opt{'b'} )                             if ( $opt{'b'} );
     @NO_COMPARE_COLUMNS= Pipe::Utils::read_requested_columns( $opt{'B'} )                             if ( $opt{'B'} );
     @NORMAL_COLUMNS    = Pipe::Utils::read_requested_columns( $opt{'n'}, $KEYWORD_ANY )               if ( $opt{'n'} );
