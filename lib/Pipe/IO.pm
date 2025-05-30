@@ -298,7 +298,7 @@ sub table_output( $ )
                         ( $main::SKIP_LINE_TABLE, my @skip_values ) = split '\.', $param;
                         if ( $main::SKIP_LINE_TABLE !~ m/^\d+$/ || ( $main::SKIP_LINE_TABLE + 0 ) < 1 )
                         {
-                            printf STDERR "**error: invalid skip value requested in chunked table output.\n", $main::SKIP_LINE_TABLE;
+                            printf STDERR "**error: invalid skip value '%s' requested in chunked table output.\n", $main::SKIP_LINE_TABLE;
                             exit 0;
                         }
                         # Preserver literals that contain '.'
@@ -484,6 +484,21 @@ Outputs appropriate table headers and footers based on format.
 =head2 print_summary($title, $stats_ref, $columns_ref, $context)
 
 Prints summary statistics to STDERR in the appropriate format.
+
+=head2 is_printable_range($line_number, $context)
+
+Checks if a given line number falls within the printable range specified in the context.
+Returns 1 if the line should be printed, 0 otherwise.
+
+=head2 build_encoding_table()
+
+Builds a hash table of URL encoding mappings for characters that need to be encoded.
+Populates the global %url_characters hash with character codes and their encoded equivalents.
+
+=head2 map_url_characters($string)
+
+Encodes a string for URL transmission by replacing special characters with percent-encoded equivalents.
+Returns the encoded string.
 
 =head2 finalize_full_read_functions($context, $all_lines_ref)
 

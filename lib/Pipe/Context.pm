@@ -266,7 +266,13 @@ sub reset_accumulators {
 # Match state methods
 sub is_in_match_frame {
     my $self = shift;
-    return $self->{is_x_match} || $self->{is_y_match};
+    # This could be written more idiomatically as:
+    #   return $self->{is_x_match} || $self->{is_y_match};
+    # However, it has been expanded to achieve 100% condition coverage
+    # with Devel::Cover, which has difficulty tracking certain OR conditions.
+    return 1 if $self->{is_x_match};
+    return 1 if $self->{is_y_match};
+    return 0;
 }
 
 sub start_match_frame {
@@ -301,9 +307,14 @@ sub get_line_buffer {
 # Check if we need to read the full file
 sub needs_full_read {
     my $self = shift;
-    return $self->{read_full} || 
-           @{$self->{sort_columns}} > 0 ||
-           $self->{tail_output};
+    # This could be written more idiomatically as:
+    #   return $self->{read_full} || @{$self->{sort_columns}} > 0 || $self->{tail_output};
+    # However, it has been expanded to achieve 100% condition coverage
+    # with Devel::Cover, which has difficulty tracking certain OR conditions.
+    return 1 if $self->{read_full};
+    return 1 if @{$self->{sort_columns}} > 0;
+    return 1 if $self->{tail_output};
+    return 0;
 }
 
 # Debugging method to dump context state
@@ -354,41 +365,106 @@ more maintainable and testable.
 
 Creates a new context object with all state initialized to defaults.
 
-=head2 get_line_number() / set_line_number($value) / increment_line_number()
+Returns a blessed hash reference containing all the state variables
+needed for pipe.pl processing.
 
-Manage the current line number being processed.
+=head2 get_line_number()
 
-=head2 get_delimiter() / set_delimiter($value)
+Returns the current line number being processed.
 
-Get or set the current delimiter.
+=head2 set_line_number($value)
 
-=head2 get_option($key) / set_option($key, $value) / set_options(\%options)
+Sets the current line number to the specified value.
 
-Manage command-line options.
+=head2 increment_line_number()
 
-=head2 get_*_columns() / get_*_ref()
+Increments the line number by 1 and returns the new value.
 
-Access various column arrays and reference hashes for different operations.
+=head2 get_delimiter()
+
+Returns the current field delimiter.
+
+=head2 set_delimiter($value)
+
+Sets the field delimiter to the specified value.
+
+=head2 get_option($key)
+
+Returns the value of the specified command-line option.
+
+=head2 set_option($key, $value)
+
+Sets a command-line option to the specified value.
+
+=head2 set_options(\%options)
+
+Replaces the entire options hash with the provided hash reference.
+
+=head2 get_sum_columns()
+
+Returns an array reference of column indices for sum operations.
+
+=head2 get_count_columns()
+
+Returns an array reference of column indices for count operations.
+
+=head2 get_avg_columns()
+
+Returns an array reference of column indices for average operations.
+
+=head2 get_width_columns()
+
+Returns an array reference of column indices for width analysis operations.
+
+=head2 get_sum_ref()
+
+Returns a hash reference containing sum accumulator data.
+
+=head2 get_count_ref()
+
+Returns a hash reference containing count accumulator data.
+
+=head2 get_avg_ref()
+
+Returns a hash reference containing average accumulator data.
+
+=head2 get_avg_count()
+
+Returns a hash reference containing count data for average calculations.
 
 =head2 reset_accumulators()
 
-Reset all accumulator hashes to empty state.
+Resets all accumulator hashes (sum, count, average, width, dedup, histogram)
+to empty state.
 
-=head2 is_in_match_frame() / start_match_frame() / end_match_frame()
+=head2 is_in_match_frame()
 
-Manage match frame state for -X and -Y operations.
+Returns true if currently inside a match frame (X or Y match is active).
 
-=head2 add_to_line_buffer($line) / get_line_buffer()
+=head2 start_match_frame()
 
-Manage the line buffer for operations that need to look at previous lines.
+Starts a new match frame by setting X match flag and resetting the frame buffer.
+
+=head2 end_match_frame()
+
+Ends the current match frame by clearing match flags and returning the frame buffer.
+
+=head2 add_to_line_buffer($line)
+
+Adds a line to the line buffer, maintaining the configured buffer size limit.
+
+=head2 get_line_buffer()
+
+Returns an array reference containing the current line buffer.
 
 =head2 needs_full_read()
 
-Determine if the entire file needs to be read before processing.
+Returns true if the entire input file needs to be read before processing
+(required for sort, tail, or read_full operations).
 
 =head2 dump_state()
 
-Debug method to print the entire context state.
+Debug method that prints the entire context state to STDERR using Data::Dumper.
 
 =head1 AUTHOR
 

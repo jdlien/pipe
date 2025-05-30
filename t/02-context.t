@@ -647,6 +647,118 @@ subtest 'needs_full_read functionality comprehensive tests' => sub {
     ok(!$ctx->needs_full_read(), 'does not need full read with empty string in tail_output');
 };
 
+# Test dump_state method - comprehensive testing
+subtest 'dump_state method comprehensive tests' => sub {
+    my $ctx = Pipe::Context->new();
+    
+    # Capture STDERR output
+    my $stderr = '';
+    {
+        local *STDERR;
+        open STDERR, '>', \$stderr;
+        $ctx->dump_state();
+        close STDERR;
+    }
+    
+    # Test that dump_state outputs something
+    like($stderr, qr/Context State:/, 'dump_state outputs header');
+    like($stderr, qr/line_number/, 'dump_state includes line_number');
+    like($stderr, qr/delimiter/, 'dump_state includes delimiter');
+    like($stderr, qr/options/, 'dump_state includes options');
+    
+    # Test dump_state with various data populated
+    $ctx->set_line_number(42);
+    $ctx->set_delimiter('::');
+    $ctx->set_option('test', 'value');
+    $ctx->{sum_ref}->{'c0'} = 100;
+    
+    $stderr = '';
+    {
+        local *STDERR;
+        open STDERR, '>', \$stderr;
+        $ctx->dump_state();
+        close STDERR;
+    }
+    
+    like($stderr, qr/'line_number'\s*=>\s*42/, 'dump_state shows correct line_number');
+    like($stderr, qr/'delimiter'\s*=>\s*'::'/, 'dump_state shows correct delimiter');
+    like($stderr, qr/'test'\s*=>\s*'value'/, 'dump_state shows options');
+    like($stderr, qr/'c0'\s*=>\s*100/, 'dump_state shows sum_ref data');
+};
+
+# Test condition coverage - structured to achieve 100% coverage
+subtest 'condition coverage tests' => sub {
+    # Test is_in_match_frame OR condition
+    # According to Devel::Cover, we need exactly 3 test cases for A || B:
+    # 1. A=false, B=false -> false
+    # 2. A=true, B=anything -> true (B not evaluated due to short-circuit)
+    # 3. A=false, B=true -> true
+    
+    # Case 1: both false -> false
+    {
+        my $ctx = Pipe::Context->new();
+        $ctx->{is_x_match} = 0;
+        $ctx->{is_y_match} = 0;
+        ok(!$ctx->is_in_match_frame(), 'is_in_match_frame: false || false = false');
+    }
+    
+    # Case 2: first true -> true (short-circuits, second not evaluated)
+    {
+        my $ctx = Pipe::Context->new();
+        $ctx->{is_x_match} = 1;
+        $ctx->{is_y_match} = 0;  # This value doesn't matter due to short-circuit
+        ok($ctx->is_in_match_frame(), 'is_in_match_frame: true || anything = true');
+    }
+    
+    # Case 3: first false, second true -> true
+    {
+        my $ctx = Pipe::Context->new();
+        $ctx->{is_x_match} = 0;
+        $ctx->{is_y_match} = 1;
+        ok($ctx->is_in_match_frame(), 'is_in_match_frame: false || true = true');
+    }
+    
+    # Test needs_full_read with 3-way OR
+    # For A || B || C, Devel::Cover tracks it as (A || B) || C
+    # We need to test all combinations where each term is evaluated
+    
+    # Case 1: all false -> false
+    {
+        my $ctx = Pipe::Context->new();
+        $ctx->{read_full} = 0;
+        @{$ctx->{sort_columns}} = ();
+        $ctx->{tail_output} = 0;
+        ok(!$ctx->needs_full_read(), 'needs_full_read: all false = false');
+    }
+    
+    # Case 2: first true -> true (short-circuits)
+    {
+        my $ctx = Pipe::Context->new();
+        $ctx->{read_full} = 1;
+        @{$ctx->{sort_columns}} = ();
+        $ctx->{tail_output} = 0;
+        ok($ctx->needs_full_read(), 'needs_full_read: read_full=true (short-circuits)');
+    }
+    
+    # Case 3: first false, second true -> true (third not evaluated)
+    {
+        my $ctx = Pipe::Context->new();
+        $ctx->{read_full} = 0;
+        @{$ctx->{sort_columns}} = (1);  # non-empty array makes this true
+        $ctx->{tail_output} = 0;
+        ok($ctx->needs_full_read(), 'needs_full_read: sort_columns non-empty (short-circuits)');
+    }
+    
+    # Case 4: first two false, third true -> true
+    {
+        my $ctx = Pipe::Context->new();
+        $ctx->{read_full} = 0;
+        @{$ctx->{sort_columns}} = ();
+        $ctx->{tail_output} = 1;
+        ok($ctx->needs_full_read(), 'needs_full_read: only tail_output=true');
+    }
+};
+
 # Test edge cases and error conditions - comprehensive testing
 subtest 'edge cases and error conditions comprehensive tests' => sub {
     my $ctx = Pipe::Context->new();
